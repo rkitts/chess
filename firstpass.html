@@ -17,7 +17,7 @@
         crossorigin="anonymous"></script>
 <script type="text/javascript" src="https://cdn.rawgit.com/lhartikk/simple-chess-ai/master/lib/js/chess.js"></script>
 <script type="text/javascript" src="http://chessboardjs.com/js/chessboard.js"></script>
-<script type="text/javascript" src="simple_calc.js"></script>
+<script type="text/javascript" src="minimax.js"></script>
 <script>
 
 window.onload = function() {
@@ -25,7 +25,7 @@ window.onload = function() {
 //--- start example JS ---
 var board;
 var game = new Chess();
-var moveCalculator = new SimpleCalculator();
+var moveCalculator = new MiniMax();
 
 /* board visualization and games state handling starts here*/
 

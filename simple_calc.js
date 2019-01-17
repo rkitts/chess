@@ -17,8 +17,8 @@ class SimpleCalculator{
 			let boardValue = -this.evaluateBoard(game.board())
 			game.undo();
 			if (boardValue > bestValue) {
-			bestValue = boardValue;
-			bestMove = newGameMove
+				bestValue = boardValue;
+				bestMove = newGameMove
 			}
 		}
 
