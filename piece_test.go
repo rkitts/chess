@@ -1,4 +1,4 @@
-/* 
+/*
  * Tests the Piece structure
  */
 package chess
@@ -6,18 +6,19 @@ package chess
 import (
 	"testing"
 )
+
 func TestNewPieceIsUnspecified(t *testing.T) {
 	var aPiece Piece
-	
+
 	if aPiece.isUnspecified() == false {
 		t.Error("piece ", aPiece, " is not unspecified")
 	}
 }
 
-func TestPieceWithOneFieldSetIsUnspecified(t *testing.T){
+func TestPieceWithOneFieldSetIsUnspecified(t *testing.T) {
 	var aPiece Piece
 
-	aPiece.pcolor = king
+	aPiece.pcolor = white
 	if aPiece.isUnspecified() == false {
 		t.Error("piece ", aPiece, " is not unspecified")
 	}

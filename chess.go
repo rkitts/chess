@@ -1,31 +1,30 @@
 package chess
 
-/*
-import(
-	"strings"
+import (
+	"bytes"
+	"fmt"
 	"strconv"
+	"strings"
+	"unicode"
 )
-*/
-
-type squareID int
 
 const emptySquare = -1
 
 // PieceType identifies the type of a piece.
 type PieceType int
 
-const pawn = 'p'
-const knight = 'n'
-const bishop = 'b'
-const rook = 'r'
-const queen = 'q'
-const king = 'k'
+const pawn PieceType = 'p'
+const knight PieceType = 'n'
+const bishop PieceType = 'b'
+const rook PieceType = 'r'
+const queen PieceType = 'q'
+const king PieceType = 'k'
 
 // PieceColor is either black or white
 type PieceColor int
 
-const black = 'b'
-const white = 'w'
+const black PieceColor = 'b'
+const white PieceColor = 'w'
 
 //Piece represents a piece on the board, having a type such as pawn or bishop and a color, white or black
 type Piece struct {
@@ -129,7 +128,7 @@ var rooks = map[PieceColor][][]int{
 		{squareNameToID["h8"], ksideCastle}}}
 
 // The current state or allowability of castling for the board. The members
-// contain the bitwise value of ksideCastle and qsideCastlea
+// contain the bitwise value of ksideCastle and qsideCastle
 type castlingState struct {
 	white int8
 	black int8
@@ -145,8 +144,8 @@ type Move struct {
 }
 
 type kingsLocation struct {
-	white squareID
-	black squareID
+	white int
+	black int
 }
 
 type historyEntry struct {
@@ -154,7 +153,7 @@ type historyEntry struct {
 	kingsLocation
 	turn            PieceColor
 	castling        castlingState
-	enpassantSquare squareID
+	enpassantSquare int
 	halfMoves       int32
 	moveNumber      int32
 }
@@ -163,9 +162,9 @@ type historyEntry struct {
 type Chess struct {
 	board           []Piece
 	turn            PieceColor
-	enpassantSquare squareID
-	halfMoves       int32
-	moveNumber      int32
+	enpassantSquare int
+	halfMoves       int
+	moveNumber      int
 	castling        castlingState
 	kings           kingsLocation
 	history         []historyEntry
@@ -175,7 +174,103 @@ type Chess struct {
 // New creates a new Chess instance initialized to the starting/default chess position
 func New() *Chess {
 	retVal := new(Chess)
+	retVal.Clear()
+	retVal.load(defaultPosition)
 	return (retVal)
+}
+
+// Reset sets the board to the default/starting position
+func (chess *Chess) Reset() {
+	chess.load(defaultPosition)
+}
+
+func (chess *Chess) get(squareID string) Piece {
+	var retVal Piece
+	if squareNum, ok := squareNameToID[squareID]; ok {
+		retVal = chess.board[squareNum]
+	}
+	return retVal
+}
+
+func (chess *Chess) put(piece Piece, squareName string) error {
+	var retVal error
+
+	if squareID, ok := squareNameToID[squareName]; ok == false {
+		retVal = fmt.Errorf("%s is not a legal square name", squareName)
+	} else {
+		retVal = chess.maybeUpdateKings(piece, squareID)
+		if retVal == nil {
+			chess.board[squareID] = piece
+			chess.updateSetup(chess.generateFen())
+		}
+	}
+	return retVal
+}
+
+func (chess *Chess) remove(squareID string) Piece {
+	var retVal = chess.get(squareID)
+	if squareNum, ok := squareNameToID[squareID]; ok {
+		var replacementPiece Piece
+		chess.board[squareNum] = replacementPiece
+	}
+	chess.updateSetup(chess.generateFen())
+	return retVal
+}
+
+func (chess *Chess) maybeUpdateKings(piece Piece, squareID int) error {
+
+	var retVal error
+
+	if piece.ptype == king {
+		switch piece.pcolor {
+		case white:
+			if chess.kings.white == emptySquare {
+				chess.kings.white = squareID
+			} else if chess.kings.white != squareID {
+				retVal = fmt.Errorf("White king already on board")
+			}
+		case black:
+			if chess.kings.black == emptySquare {
+				chess.kings.black = squareID
+			} else if chess.kings.black != squareID {
+				retVal = fmt.Errorf("Black king already on board")
+			}
+		}
+	}
+	return retVal
+}
+
+func (chess *Chess) load(fenToLoad string) error {
+	fen, err := parseFEN(fenToLoad)
+	if err == nil {
+		square := 0
+		for cntr := 0; cntr < len(fen.piecePlacement); cntr++ {
+			maybePiece := fen.piecePlacement[cntr]
+			if maybePiece == '/' {
+				square += 8
+			} else if unicode.IsDigit(rune(maybePiece)) {
+				square += int(maybePiece - '0')
+			} else {
+				var color PieceColor
+				color = black
+				if maybePiece < 'a' {
+					color = white
+				}
+				chess.put(Piece{PieceType(maybePiece), color}, algebraic(square))
+				square++
+			}
+		}
+		chess.turn = fen.activeColor
+		chess.castling = fen.castlingAbility
+		if fen.enpassantCapture == "-" {
+			chess.enpassantSquare = emptySquare
+		} else {
+			chess.enpassantSquare = squareNameToID[fen.enpassantCapture]
+		}
+		chess.halfMoves = fen.halfMoves
+		chess.moveNumber = fen.fullMoves
+	}
+	return err
 }
 
 // Clear sets the Chess instance to the starting position
@@ -186,33 +281,116 @@ func (chess *Chess) Clear() {
 	chess.enpassantSquare = emptySquare
 	chess.halfMoves = 0
 	chess.moveNumber = 1
+	chess.kings.black = emptySquare
+	chess.kings.white = emptySquare
 	chess.history = make([]historyEntry, 0)
 	chess.header = make(map[string]string)
-	//	chess.updateSetup(chess.generateFen())
 }
 
-/*
-func (chess *Chess) updateSetup(fen string){
+func (chess *Chess) updateSetup(fen string) {
+	if len(chess.history) == 0 {
+		if fen != defaultPosition {
+			chess.header["SetUp"] = "1"
+			chess.header["FEN"] = fen
+		} else {
+			delete(chess.header, "SetUp")
+			delete(chess.header, "FEN")
+		}
+	}
 }
 
-func (chess *Chess) generateFen() string{
+func (chess *Chess) generateFen() string {
 	emptySquares := 0
 	var retVal strings.Builder
-	for cntr := squareNameToID["a8"]; cntr <= squareNameToID["h1"]; cntr++ {
-		if unspecifiedPiece(chess.board[cntr]){
-			emptySquares++
-		} else {
-			if emptySquares > 0 {
-				retVal.WriteString(strconv.Itoa(emptySquares))
-				emptySquares = 0
+	for rankValue := 0; rankValue <= 112; rankValue += 16 {
+		for fileValue := 0; fileValue < 8; fileValue++ {
+			squareID := squareNameToID[algebraic(rankValue+fileValue)]
+			if chess.board[squareID].isUnspecified() {
+				emptySquares++
+			} else {
+				if emptySquares > 0 {
+					retVal.WriteString(strconv.Itoa(emptySquares))
+					emptySquares = 0
+				}
+				pieceCode := rune(chess.board[squareID].ptype)
+				if chess.board[squareID].pcolor == white {
+					pieceCode = unicode.ToUpper(rune(pieceCode))
+				}
+				retVal.WriteRune(pieceCode)
+			}
+			if ((squareID + 1) & 0x88) != 0 {
+				if emptySquares > 0 {
+					retVal.WriteString(strconv.Itoa(emptySquares))
+					emptySquares = 0
+				}
+				if squareID != squareNameToID["h1"] {
+					retVal.WriteString("/")
+				}
 			}
 		}
 	}
+	retVal.WriteString(" ")
+	retVal.WriteRune(rune(chess.turn))
+	retVal.WriteString(" ")
+	retVal.WriteString(generateCastlingFEN(chess.castling))
+	retVal.WriteString(" ")
+	retVal.WriteString(generateEnpassantFEN(chess.enpassantSquare))
+	retVal.WriteString(" ")
+	retVal.WriteString(strconv.Itoa(chess.halfMoves))
+	retVal.WriteString(" ")
+	retVal.WriteString(strconv.Itoa(chess.moveNumber))
 	return retVal.String()
 }
-*/
 
-func (p Piece) isUnspecified() bool {
+func generateEnpassantFEN(squareID int) string {
+	retVal := "-"
+	if squareID != emptySquare {
+		retVal = algebraic(squareID)
+	}
+	return retVal
+}
+
+func generateCastlingFEN(castling castlingState) string {
+	var retVal strings.Builder
+
+	if castling.white&ksideCastle != 0 {
+		retVal.WriteString("K")
+	}
+	if castling.white&qsideCastle != 0 {
+		retVal.WriteString("Q")
+	}
+
+	if castling.black&ksideCastle != 0 {
+		retVal.WriteString("k")
+	}
+	if castling.black&qsideCastle != 0 {
+		retVal.WriteString("q")
+	}
+	if retVal.Len() == 0 {
+		retVal.WriteString("-")
+	}
+	return retVal.String()
+}
+
+func (p *Piece) isUnspecified() bool {
 	retVal := p.pcolor == 0 || p.ptype == 0
 	return (retVal)
+}
+
+func rank(square int) int {
+	return square >> 4
+}
+
+func file(square int) int {
+	return square & 15
+}
+
+func algebraic(square int) string {
+	f := file(square)
+	r := rank(square)
+
+	var retVal bytes.Buffer
+	retVal.WriteString("abcdefgh"[f : f+1])
+	retVal.WriteString("87654321"[r : r+1])
+	return retVal.String()
 }
