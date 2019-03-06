@@ -5,6 +5,60 @@ import (
 	"testing"
 )
 
+func TestMovingPawnReturnsCorrectMoves(t *testing.T) {
+	chess := New()
+	chess.Clear()
+	chess.board[squareNameToID["a2"]] = Piece{pcolor: white, ptype: pawn}
+	actualMoves := chess.generateMoves(true, "a2")
+	if len(actualMoves) != 2 {
+		t.Errorf("Expected 2 moves, got %d", len(actualMoves))
+	}
+}
+func TestDetermineSquareRangeFailsForInvalidSquare(t *testing.T) {
+	chess := New()
+	first, last, err := chess.determineSquareRange("b9")
+	if err == nil {
+		t.Errorf("Error not reported")
+	}
+	if first != emptySquare || last != emptySquare {
+		t.Errorf("Invalid squares returned, %d and %d", first, last)
+	}
+}
+
+func TestBuildMoveCapturesIfSquareNotEmpty(t *testing.T) {
+	chess := New()
+	from := squareNameToID["a1"]
+	to := squareNameToID["a2"]
+
+	actual := chess.buildMove(from, to, 0, 0)
+	if actual.capturedType != pawn {
+		t.Errorf("Unexpected captureType '%c'", actual.capturedType)
+	}
+}
+
+func TestBuildMoveCapturesNothingIfSquareEmpty(t *testing.T) {
+	chess := New()
+	from := squareNameToID["a2"]
+	to := squareNameToID["a3"]
+
+	actual := chess.buildMove(from, to, 0, 0)
+	if actual.capturedType != 0 {
+		t.Errorf("Unexpected captureType '%c'", actual.capturedType)
+	}
+}
+
+func TestBuildMoveDoesEnpassant(t *testing.T) {
+	chess := New()
+	chess.Clear()
+	from := squareNameToID["a2"]
+	to := squareNameToID["a3"]
+
+	actual := chess.buildMove(from, to, enpassantMove, 0)
+	if actual.capturedType != pawn {
+		t.Errorf("Expected a pawn, got '%c'", actual.capturedType)
+	}
+}
+
 func TestRemoveRemoves(t *testing.T) {
 	chess := New()
 	piece := chess.remove("b2")
@@ -82,10 +136,10 @@ func TestGenerateEnpassantFEN(t *testing.T) {
 
 func TestGenerateCastlingFEN(t *testing.T) {
 	var state castlingState
-	state.white |= ksideCastle
-	state.white |= qsideCastle
-	state.black |= ksideCastle
-	state.black |= qsideCastle
+	state.white |= ksideCastleMove
+	state.white |= qsideCastleMove
+	state.black |= ksideCastleMove
+	state.black |= qsideCastleMove
 	actual := generateCastlingFEN(state)
 	if actual != "KQkq" {
 		t.Errorf("Expected 'KQkq' got '%s'", actual)

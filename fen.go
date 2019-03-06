@@ -172,13 +172,13 @@ func parseCastling(fenCastling string) (castlingState, error) {
 	for cntr := 0; cntr < len(fenCastling) && err == nil; cntr++ {
 		switch fenCastling[cntr] {
 		case 'K':
-			retVal.white |= ksideCastle
+			retVal.white |= ksideCastleMove
 		case 'Q':
-			retVal.white |= qsideCastle
+			retVal.white |= qsideCastleMove
 		case 'k':
-			retVal.black |= ksideCastle
+			retVal.black |= ksideCastleMove
 		case 'q':
-			retVal.black |= qsideCastle
+			retVal.black |= qsideCastleMove
 		case '-':
 			break
 		default:

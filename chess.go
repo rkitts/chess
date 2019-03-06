@@ -20,6 +20,8 @@ const rook PieceType = 'r'
 const queen PieceType = 'q'
 const king PieceType = 'k'
 
+var promotionTypes = []PieceType{queen, rook, bishop, knight}
+
 // PieceColor is either black or white
 type PieceColor int
 
@@ -94,13 +96,15 @@ var shifts = map[PieceType]int{
 	king:   5}
 
 // Bitwise values for Move.flags
-const normal = 1
-const capture = 2
-const bigPawn = 4
-const enpassantCapture = 8
-const promotion = 16
-const ksideCastle = 32
-const qsideCastle = 64
+const (
+	normalMove      = 1
+	captureMove     = 2
+	bigPawnMove     = 4
+	enpassantMove   = 8
+	promotionMove   = 16
+	ksideCastleMove = 32
+	qsideCastleMove = 64
+)
 
 const rank1 = 7
 const rank2 = 6
@@ -122,10 +126,10 @@ var squareNameToID = map[string]int{
 	"a1": 112, "b1": 113, "c1": 114, "d1": 115, "e1": 116, "f1": 117, "g1": 118, "h1": 119}
 
 var rooks = map[PieceColor][][]int{
-	white: {{squareNameToID["a1"], qsideCastle},
-		{squareNameToID["h1"], ksideCastle}},
-	black: {{squareNameToID["a8"], qsideCastle},
-		{squareNameToID["h8"], ksideCastle}}}
+	white: {{squareNameToID["a1"], qsideCastleMove},
+		{squareNameToID["h1"], ksideCastleMove}},
+	black: {{squareNameToID["a8"], qsideCastleMove},
+		{squareNameToID["h8"], ksideCastleMove}}}
 
 // The current state or allowability of castling for the board. The members
 // contain the bitwise value of ksideCastle and qsideCastle
@@ -136,11 +140,13 @@ type castlingState struct {
 
 // Move describes a move on the board
 type Move struct {
-	turn  PieceColor
-	from  int32
-	to    int32
-	ptype PieceType
-	flags int8
+	turn         PieceColor
+	from         int
+	to           int
+	ptype        PieceType
+	flags        int
+	promotedType PieceType
+	capturedType PieceType
 }
 
 type kingsLocation struct {
@@ -256,7 +262,10 @@ func (chess *Chess) load(fenToLoad string) error {
 				if maybePiece < 'a' {
 					color = white
 				}
-				chess.put(Piece{PieceType(maybePiece), color}, algebraic(square))
+				// TODO: This is terrible. Somehow make it so PieceType is a little more
+				// robust instead of this upper/lowercase crap.
+				pieceType := PieceType(unicode.ToLower(rune(maybePiece)))
+				chess.put(Piece{pieceType, color}, algebraic(square))
 				square++
 			}
 		}
@@ -353,17 +362,17 @@ func generateEnpassantFEN(squareID int) string {
 func generateCastlingFEN(castling castlingState) string {
 	var retVal strings.Builder
 
-	if castling.white&ksideCastle != 0 {
+	if castling.white&ksideCastleMove != 0 {
 		retVal.WriteString("K")
 	}
-	if castling.white&qsideCastle != 0 {
+	if castling.white&qsideCastleMove != 0 {
 		retVal.WriteString("Q")
 	}
 
-	if castling.black&ksideCastle != 0 {
+	if castling.black&ksideCastleMove != 0 {
 		retVal.WriteString("k")
 	}
-	if castling.black&qsideCastle != 0 {
+	if castling.black&qsideCastleMove != 0 {
 		retVal.WriteString("q")
 	}
 	if retVal.Len() == 0 {
@@ -375,6 +384,102 @@ func generateCastlingFEN(castling castlingState) string {
 func (p *Piece) isUnspecified() bool {
 	retVal := p.pcolor == 0 || p.ptype == 0
 	return (retVal)
+}
+
+func (chess *Chess) buildMove(from int, to int, flags int, promotionType PieceType) Move {
+	retVal := Move{
+		turn:  chess.turn,
+		from:  from,
+		to:    to,
+		flags: flags,
+		ptype: chess.board[from].ptype}
+
+	if promotionType != 0 {
+		retVal.flags |= promotionMove
+		retVal.promotedType = promotionType
+	}
+
+	if !chess.board[to].isUnspecified() {
+		retVal.capturedType = chess.board[to].ptype
+	} else if flags&enpassantMove != 0 {
+		retVal.capturedType = pawn
+	}
+	return retVal
+}
+
+func (chess *Chess) generateMoves(legalMoves bool, singleSquareName string) []Move {
+	var retVal []Move
+
+	us := chess.turn
+	//	them := swapColor(us)
+
+	firstSquare, lastSquare, err := chess.determineSquareRange(singleSquareName)
+	if err == nil {
+		//		singleSquare := firstSquare == lastSquare
+		secondRank := map[PieceColor]int{black: rank7, white: rank2}
+		for cntr := firstSquare; cntr <= lastSquare; cntr++ {
+			if cntr&0x88 != 0 {
+				cntr += 7
+				continue
+			}
+			currPiece := chess.board[cntr]
+			if currPiece.isUnspecified() || currPiece.pcolor != us {
+				continue
+			}
+
+			if currPiece.ptype == pawn {
+				squareNum := cntr + pawnOffsets[us][0]
+				if chess.board[squareNum].isUnspecified() {
+					retVal = append(retVal, chess.addMove(cntr, squareNum, normalMove)...)
+					squareNum = cntr + pawnOffsets[us][1]
+					if secondRank[us] == rank(cntr) && chess.board[squareNum].isUnspecified() {
+						retVal = append(retVal, chess.addMove(cntr, squareNum, bigPawnMove)...)
+					}
+				}
+			}
+		}
+	}
+	return retVal
+}
+
+func (chess *Chess) addMove(from int, to int, flags int) []Move {
+	var retVal []Move
+	// Are we promoting a pawn?
+	if chess.board[from].ptype == pawn && (rank(to) == rank8 || rank(to) == rank1) {
+		for _, promotionType := range promotionTypes {
+			retVal = append(retVal, chess.buildMove(from, to, flags, promotionType))
+		}
+	} else {
+		retVal = append(retVal, chess.buildMove(from, to, flags, 0))
+	}
+	return retVal
+}
+
+func (chess *Chess) determineSquareRange(singleSquareName string) (int, int, error) {
+	var err error
+	firstSquare := emptySquare
+	lastSquare := emptySquare
+
+	// Are we generating moves for a single square?
+	if singleSquareName != "" {
+		if _, ok := squareNameToID[singleSquareName]; ok {
+			firstSquare = squareNameToID[singleSquareName]
+			lastSquare = firstSquare
+		} else {
+			err = fmt.Errorf("Invalid square name '%s'", singleSquareName)
+		}
+	} else {
+		firstSquare = squareNameToID["a8"]
+		lastSquare = squareNameToID["h1"]
+	}
+	return firstSquare, lastSquare, err
+}
+
+func swapColor(color PieceColor) PieceColor {
+	if color == white {
+		return black
+	}
+	return white
 }
 
 func rank(square int) int {
