@@ -149,6 +149,8 @@ type Move struct {
 	capturedType PieceType
 }
 
+var secondRank = map[PieceColor]int{black: rank7, white: rank2}
+
 type kingsLocation struct {
 	white int
 	black int
@@ -410,33 +412,85 @@ func (chess *Chess) buildMove(from int, to int, flags int, promotionType PieceTy
 func (chess *Chess) generateMoves(legalMoves bool, singleSquareName string) []Move {
 	var retVal []Move
 
-	us := chess.turn
-	//	them := swapColor(us)
-
+	ourColor := chess.turn
 	firstSquare, lastSquare, err := chess.determineSquareRange(singleSquareName)
 	if err == nil {
-		//		singleSquare := firstSquare == lastSquare
-		secondRank := map[PieceColor]int{black: rank7, white: rank2}
+		//		singleSquare := firstSquare == lastSquar
 		for cntr := firstSquare; cntr <= lastSquare; cntr++ {
 			if cntr&0x88 != 0 {
 				cntr += 7
 				continue
 			}
 			currPiece := chess.board[cntr]
-			if currPiece.isUnspecified() || currPiece.pcolor != us {
+			if currPiece.isUnspecified() || currPiece.pcolor != ourColor {
 				continue
 			}
-
 			if currPiece.ptype == pawn {
-				squareNum := cntr + pawnOffsets[us][0]
-				if chess.board[squareNum].isUnspecified() {
-					retVal = append(retVal, chess.addMove(cntr, squareNum, normalMove)...)
-					squareNum = cntr + pawnOffsets[us][1]
-					if secondRank[us] == rank(cntr) && chess.board[squareNum].isUnspecified() {
-						retVal = append(retVal, chess.addMove(cntr, squareNum, bigPawnMove)...)
-					}
-				}
+				// Pawn moves...
+				retVal = append(retVal, chess.getPawnMoves(cntr, ourColor)...)
+				retVal = append(retVal, chess.getPawnAttacks(cntr, ourColor)...)
+			} else {
+				retVal = append(retVal, chess.getPieceMoves(cntr, currPiece)...)
 			}
+		}
+	}
+	return retVal
+}
+
+func (chess *Chess) getPieceMoves(fromSquare int, currPiece Piece) []Move {
+	var retVal []Move
+
+	for _, offset := range pieceOffsets[currPiece.ptype] {
+		squareNum := fromSquare
+		for {
+			squareNum += offset
+			if squareNum&0x88 != 0 {
+				break
+			}
+			if chess.board[squareNum].isUnspecified() {
+				retVal = append(retVal, chess.addMove(fromSquare, squareNum, normalMove)...)
+			} else {
+				if chess.board[squareNum].pcolor != currPiece.pcolor {
+					retVal = append(retVal, chess.addMove(fromSquare, squareNum, captureMove)...)
+				}
+				break
+			}
+			// King and knights only go to a single square
+			if currPiece.ptype == knight || currPiece.ptype == king {
+				break
+			}
+		}
+	}
+	return retVal
+}
+
+func (chess *Chess) getPawnAttacks(fromSquare int, ourColor PieceColor) []Move {
+	var retVal []Move
+
+	squareNum := fromSquare + pawnOffsets[ourColor][0]
+	for offsetIndex := 2; offsetIndex < 4; offsetIndex++ {
+		squareNum = fromSquare + pawnOffsets[ourColor][offsetIndex]
+		if squareNum&0x88 != 0 {
+			continue
+		}
+		if chess.board[squareNum].pcolor == swapColor(ourColor) {
+			retVal = append(retVal, chess.addMove(fromSquare, squareNum, captureMove)...)
+		} else if squareNum == chess.enpassantSquare {
+			retVal = append(retVal, chess.addMove(fromSquare, squareNum, enpassantMove)...)
+		}
+	}
+	return retVal
+}
+
+func (chess *Chess) getPawnMoves(fromSquare int, ourColor PieceColor) []Move {
+	var retVal []Move
+
+	squareNum := fromSquare + pawnOffsets[ourColor][0]
+	if chess.board[squareNum].isUnspecified() {
+		retVal = append(retVal, chess.addMove(fromSquare, squareNum, normalMove)...)
+		squareNum = fromSquare + pawnOffsets[ourColor][1]
+		if secondRank[ourColor] == rank(fromSquare) && chess.board[squareNum].isUnspecified() {
+			retVal = append(retVal, chess.addMove(squareNum, squareNum, bigPawnMove)...)
 		}
 	}
 	return retVal

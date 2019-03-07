@@ -5,15 +5,107 @@ import (
 	"testing"
 )
 
-func TestMovingPawnReturnsCorrectMoves(t *testing.T) {
+func TestKingAndKnightMoveOnlyEightMoves(t *testing.T) {
 	chess := New()
 	chess.Clear()
-	chess.board[squareNameToID["a2"]] = Piece{pcolor: white, ptype: pawn}
-	actualMoves := chess.generateMoves(true, "a2")
+	actualMoves := chess.getPieceMoves(squareNameToID["e5"], Piece{pcolor: white, ptype: knight})
+	if len(actualMoves) != 8 {
+		t.Errorf("Expected 8 moves, got %d", len(actualMoves))
+	}
+	actualMoves = chess.getPieceMoves(squareNameToID["e5"], Piece{pcolor: white, ptype: king})
+	if len(actualMoves) != 8 {
+		t.Errorf("Expected 8 moves, got %d", len(actualMoves))
+	}
+
+}
+
+func TestKnightMoveOnlyEightMoves(t *testing.T) {
+	chess := New()
+	chess.Clear()
+	actualMoves := chess.getPieceMoves(squareNameToID["e5"], Piece{pcolor: white, ptype: knight})
+	if len(actualMoves) != 8 {
+		t.Errorf("Expected 8 moves, got %d", len(actualMoves))
+	}
+}
+
+func TestPieceMoveObservesPieces(t *testing.T) {
+	chess := New()
+	chess.Clear()
+	chess.board[squareNameToID["a2"]] = Piece{pcolor: white, ptype: rook}
+	actualMoves := chess.getPieceMoves(squareNameToID["a1"], Piece{pcolor: white, ptype: rook})
+	if len(actualMoves) != 7 {
+		t.Errorf("Expected 7 moves, got %d", len(actualMoves))
+	}
+}
+
+func TestPieceMoveEnds(t *testing.T) {
+	chess := New()
+	chess.Clear()
+	actualMoves := chess.getPieceMoves(squareNameToID["a1"], Piece{pcolor: white, ptype: rook})
+	if len(actualMoves) != 14 {
+		t.Errorf("Expected 14 moves, got %d", len(actualMoves))
+	}
+}
+
+func TestPawnAttacksEnpassant(t *testing.T) {
+	chess := New()
+	chess.Clear()
+	chess.enpassantSquare = squareNameToID["d6"]
+	chess.board[squareNameToID["b2"]] = Piece{pcolor: white, ptype: pawn}
+	actualMoves := chess.getPawnAttacks(squareNameToID["c5"], white)
+	if len(actualMoves) != 1 {
+		t.Errorf("Expected 1 moves, got %d", len(actualMoves))
+	} else {
+		if actualMoves[0].flags&enpassantMove == 0 {
+			t.Errorf("Expected an enpassantMove")
+		}
+	}
+}
+
+func TestPawnAttacksDiagonals(t *testing.T) {
+	chess := New()
+	chess.Clear()
+	chess.board[squareNameToID["b2"]] = Piece{pcolor: white, ptype: pawn}
+	chess.board[squareNameToID["a3"]] = Piece{pcolor: black, ptype: pawn}
+	chess.board[squareNameToID["c3"]] = Piece{pcolor: black, ptype: pawn}
+	actualMoves := chess.getPawnAttacks(squareNameToID["b2"], white)
 	if len(actualMoves) != 2 {
 		t.Errorf("Expected 2 moves, got %d", len(actualMoves))
 	}
 }
+
+func TestMovingBlockedPawnHasNoBigPawnMove(t *testing.T) {
+	chess := New()
+	chess.Clear()
+	chess.board[squareNameToID["a2"]] = Piece{pcolor: white, ptype: pawn}
+	chess.board[squareNameToID["a4"]] = Piece{pcolor: white, ptype: pawn}
+	actualMoves := chess.getPawnMoves(squareNameToID["a2"], white)
+	if len(actualMoves) != 1 {
+		t.Errorf("Expected 1 moves, got %d", len(actualMoves))
+	}
+}
+
+func TestMovingUnblockedPawnReturnsCorrectMoves(t *testing.T) {
+	chess := New()
+	chess.Clear()
+	chess.board[squareNameToID["a2"]] = Piece{pcolor: white, ptype: pawn}
+	actualMoves := chess.getPawnMoves(squareNameToID["a2"], white)
+	if len(actualMoves) != 2 {
+		t.Errorf("Expected 2 moves, got %d", len(actualMoves))
+	}
+
+	foundBigPawn := false
+	for _, move := range actualMoves {
+		if move.flags&bigPawnMove != 0 {
+			foundBigPawn = true
+			break
+		}
+	}
+	if foundBigPawn == false {
+		t.Errorf("Didn't find a bigpawn move")
+	}
+}
+
 func TestDetermineSquareRangeFailsForInvalidSquare(t *testing.T) {
 	chess := New()
 	first, last, err := chess.determineSquareRange("b9")
