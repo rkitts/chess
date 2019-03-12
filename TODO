@@ -1,1 +1,1 @@
-Implement validate(fen string)
+- Implement legalMoves handling in chess::genrateMoves

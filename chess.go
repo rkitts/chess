@@ -87,7 +87,7 @@ var rays = []int{
 	0, -15, 0, 0, 0, 0, 0, -16, 0, 0, 0, 0, 0, -17, 0, 0,
 	-15, 0, 0, 0, 0, 0, 0, -16, 0, 0, 0, 0, 0, 0, -17}
 
-var shifts = map[PieceType]int{
+var shifts = map[PieceType]uint{
 	pawn:   0,
 	knight: 1,
 	bishop: 2,
@@ -133,10 +133,7 @@ var rooks = map[PieceColor][][]int{
 
 // The current state or allowability of castling for the board. The members
 // contain the bitwise value of ksideCastle and qsideCastle
-type castlingState struct {
-	white int8
-	black int8
-}
+type castlingState map[PieceColor]int
 
 // Move describes a move on the board
 type Move struct {
@@ -151,14 +148,11 @@ type Move struct {
 
 var secondRank = map[PieceColor]int{black: rank7, white: rank2}
 
-type kingsLocation struct {
-	white int
-	black int
-}
+type kingsLocation map[PieceColor]int
 
 type historyEntry struct {
-	move Move
-	kingsLocation
+	move            Move
+	kings           kingsLocation
 	turn            PieceColor
 	castling        castlingState
 	enpassantSquare int
@@ -232,15 +226,15 @@ func (chess *Chess) maybeUpdateKings(piece Piece, squareID int) error {
 	if piece.ptype == king {
 		switch piece.pcolor {
 		case white:
-			if chess.kings.white == emptySquare {
-				chess.kings.white = squareID
-			} else if chess.kings.white != squareID {
+			if chess.kings[white] == emptySquare {
+				chess.kings[white] = squareID
+			} else if chess.kings[white] != squareID {
 				retVal = fmt.Errorf("White king already on board")
 			}
 		case black:
-			if chess.kings.black == emptySquare {
-				chess.kings.black = squareID
-			} else if chess.kings.black != squareID {
+			if chess.kings[black] == emptySquare {
+				chess.kings[black] = squareID
+			} else if chess.kings[black] != squareID {
 				retVal = fmt.Errorf("Black king already on board")
 			}
 		}
@@ -288,12 +282,13 @@ func (chess *Chess) load(fenToLoad string) error {
 func (chess *Chess) Clear() {
 	chess.board = make([]Piece, 128)
 	chess.turn = white
-	chess.castling = castlingState{0, 0}
+	chess.castling = castlingState{white: 0, black: 0}
 	chess.enpassantSquare = emptySquare
 	chess.halfMoves = 0
 	chess.moveNumber = 1
-	chess.kings.black = emptySquare
-	chess.kings.white = emptySquare
+	chess.kings = kingsLocation{white: emptySquare, black: emptySquare}
+	chess.kings[black] = emptySquare
+	chess.kings[white] = emptySquare
 	chess.history = make([]historyEntry, 0)
 	chess.header = make(map[string]string)
 }
@@ -364,17 +359,17 @@ func generateEnpassantFEN(squareID int) string {
 func generateCastlingFEN(castling castlingState) string {
 	var retVal strings.Builder
 
-	if castling.white&ksideCastleMove != 0 {
+	if castling[white]&ksideCastleMove != 0 {
 		retVal.WriteString("K")
 	}
-	if castling.white&qsideCastleMove != 0 {
+	if castling[white]&qsideCastleMove != 0 {
 		retVal.WriteString("Q")
 	}
 
-	if castling.black&ksideCastleMove != 0 {
+	if castling[black]&ksideCastleMove != 0 {
 		retVal.WriteString("k")
 	}
-	if castling.black&qsideCastleMove != 0 {
+	if castling[black]&qsideCastleMove != 0 {
 		retVal.WriteString("q")
 	}
 	if retVal.Len() == 0 {
@@ -415,7 +410,6 @@ func (chess *Chess) generateMoves(legalMoves bool, singleSquareName string) []Mo
 	ourColor := chess.turn
 	firstSquare, lastSquare, err := chess.determineSquareRange(singleSquareName)
 	if err == nil {
-		//		singleSquare := firstSquare == lastSquar
 		for cntr := firstSquare; cntr <= lastSquare; cntr++ {
 			if cntr&0x88 != 0 {
 				cntr += 7
@@ -432,6 +426,41 @@ func (chess *Chess) generateMoves(legalMoves bool, singleSquareName string) []Mo
 			} else {
 				retVal = append(retVal, chess.getPieceMoves(cntr, currPiece)...)
 			}
+		}
+
+		singleSquare := firstSquare == lastSquare
+		if !singleSquare || lastSquare == chess.kings[ourColor] {
+			retVal = append(retVal, chess.getCastlingMoves(ourColor)...)
+		}
+	}
+	return retVal
+}
+
+func (chess *Chess) getCastlingMoves(ourColor PieceColor) []Move {
+	var retVal []Move
+
+	theirColor := swapColor(ourColor)
+	if chess.castling[ourColor]&ksideCastleMove != 0 {
+		castlingFrom := chess.kings[ourColor]
+		castlingTo := castlingFrom + 2
+		if chess.board[castlingFrom+1].isUnspecified() &&
+			chess.board[castlingTo].isUnspecified() &&
+			!chess.attacked(theirColor, castlingFrom) &&
+			!chess.attacked(theirColor, castlingFrom+1) &&
+			!chess.attacked(theirColor, castlingTo) {
+			retVal = append(retVal, chess.addMove(castlingFrom, castlingTo, ksideCastleMove)...)
+		}
+	}
+	if chess.castling[ourColor]&qsideCastleMove != 0 {
+		castlingFrom := chess.kings[ourColor]
+		castlingTo := castlingFrom - 2
+		if chess.board[castlingFrom-1].isUnspecified() &&
+			chess.board[castlingTo].isUnspecified() &&
+			chess.board[castlingFrom-3].isUnspecified() &&
+			!chess.attacked(theirColor, castlingFrom) &&
+			!chess.attacked(theirColor, castlingFrom-1) &&
+			!chess.attacked(theirColor, castlingTo) {
+			retVal = append(retVal, chess.addMove(castlingFrom, castlingTo, qsideCastleMove)...)
 		}
 	}
 	return retVal
@@ -506,6 +535,61 @@ func (chess *Chess) addMove(from int, to int, flags int) []Move {
 	} else {
 		retVal = append(retVal, chess.buildMove(from, to, flags, 0))
 	}
+	return retVal
+}
+
+func (chess *Chess) attacked(colorAttacking PieceColor, squareNumAttacked int) bool {
+	retVal := false
+
+	for cntr := squareNameToID["a8"]; retVal == false && cntr < squareNameToID["h1"]; cntr++ {
+		if cntr&0x88 != 0 {
+			cntr += 7
+			continue
+		}
+		if chess.board[cntr].isUnspecified() || chess.board[cntr].pcolor != colorAttacking {
+			continue
+		}
+		piece := chess.board[cntr]
+		difference := cntr - squareNumAttacked
+		index := difference + 119
+
+		if (attacks[index] & (1 << shifts[piece.ptype])) != 0 {
+			if piece.ptype == pawn {
+				if difference > 0 {
+					if piece.pcolor == white {
+						retVal = true
+						break
+					}
+				} else {
+					if piece.pcolor == black {
+						retVal = true
+						break
+					}
+				}
+				continue
+			}
+			if piece.ptype == knight || piece.ptype == king {
+				retVal = true
+				break
+			}
+
+			offset := rays[index]
+			j := cntr + offset
+			blocked := false
+			for j != squareNumAttacked {
+				if !chess.board[j].isUnspecified() {
+					blocked = true
+					break
+				}
+				j += offset
+			}
+			if !blocked {
+				retVal = true
+				break
+			}
+		}
+	}
+
 	return retVal
 }
 

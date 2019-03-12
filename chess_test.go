@@ -5,6 +5,67 @@ import (
 	"testing"
 )
 
+func TestCastlingHonorsAttackedSquares(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	chess.board[squareNameToID["e1"]] = Piece{pcolor: white, ptype: king}
+	chess.castling[white] |= (ksideCastleMove | qsideCastleMove)
+	chess.kings[white] = squareNameToID["e1"]
+
+	chess.board[squareNameToID["f2"]] = Piece{pcolor: black, ptype: rook}
+	actualMoves := chess.getCastlingMoves(white)
+	if len(actualMoves) != 1 {
+		t.Errorf("Expected 1 moves, got %d", len(actualMoves))
+	}
+}
+func TestCastlingMoves(t *testing.T) {
+	chess := New()
+	chess.Clear()
+	chess.board[squareNameToID["e1"]] = Piece{pcolor: white, ptype: king}
+	chess.castling[white] = (ksideCastleMove | qsideCastleMove)
+	chess.kings[white] = squareNameToID["e1"]
+	actualMoves := chess.getCastlingMoves(white)
+	if len(actualMoves) != 2 {
+		t.Errorf("Expected 2 moves, got %d", len(actualMoves))
+	}
+
+	chess.castling[white] = ksideCastleMove
+	actualMoves = chess.getCastlingMoves(white)
+	if len(actualMoves) != 1 {
+		t.Errorf("Expected 1 moves, got %d", len(actualMoves))
+	}
+
+	chess.castling[white] = qsideCastleMove
+	actualMoves = chess.getCastlingMoves(white)
+	if len(actualMoves) != 1 {
+		t.Errorf("Expected 1 moves, got %d", len(actualMoves))
+	}
+}
+
+func TestAttacksWithRook(t *testing.T) {
+	// This just makes sure the code dealing with sliders works
+	chess := New()
+	chess.Clear()
+	chess.board[squareNameToID["a1"]] = Piece{pcolor: white, ptype: rook}
+	chess.board[squareNameToID["a8"]] = Piece{pcolor: black, ptype: rook}
+	actual := chess.attacked(white, squareNameToID["a8"])
+	if actual != true {
+		t.Errorf("Expected true, got %v", actual)
+	}
+}
+
+func TestAttackedForPawns(t *testing.T) {
+	chess := New()
+	chess.Clear()
+	chess.board[squareNameToID["a2"]] = Piece{pcolor: white, ptype: pawn}
+	chess.board[squareNameToID["b3"]] = Piece{pcolor: black, ptype: pawn}
+	actual := chess.attacked(white, squareNameToID["b3"])
+	if actual != true {
+		t.Errorf("Expected true, got %v", actual)
+	}
+}
+
 func TestKingAndKnightMoveOnlyEightMoves(t *testing.T) {
 	chess := New()
 	chess.Clear()
@@ -227,18 +288,18 @@ func TestGenerateEnpassantFEN(t *testing.T) {
 }
 
 func TestGenerateCastlingFEN(t *testing.T) {
-	var state castlingState
-	state.white |= ksideCastleMove
-	state.white |= qsideCastleMove
-	state.black |= ksideCastleMove
-	state.black |= qsideCastleMove
+	var state = make(castlingState)
+	state[white] |= ksideCastleMove
+	state[white] |= qsideCastleMove
+	state[black] |= ksideCastleMove
+	state[black] |= qsideCastleMove
 	actual := generateCastlingFEN(state)
 	if actual != "KQkq" {
 		t.Errorf("Expected 'KQkq' got '%s'", actual)
 	}
 
-	state.white = 0
-	state.black = 0
+	state[white] = 0
+	state[black] = 0
 	actual = generateCastlingFEN(state)
 	if actual != "-" {
 		t.Errorf("Expected '-' got '%s'", actual)

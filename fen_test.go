@@ -63,16 +63,16 @@ func TestParseCastlingWorks(t *testing.T) {
 	if err != nil {
 		t.Errorf("error set %s", err)
 	}
-	if (result.white & ksideCastleMove) == 0 {
+	if (result[white] & ksideCastleMove) == 0 {
 		t.Error("white ksideCastle not set")
 	}
-	if (result.white & qsideCastleMove) == 0 {
+	if (result[white] & qsideCastleMove) == 0 {
 		t.Error("white qsideCastle not set")
 	}
-	if (result.black & ksideCastleMove) == 0 {
+	if (result[black] & ksideCastleMove) == 0 {
 		t.Error("black ksideCastle not set")
 	}
-	if (result.black & qsideCastleMove) == 0 {
+	if (result[black] & qsideCastleMove) == 0 {
 		t.Error("black qsideCastle not set")
 	}
 }

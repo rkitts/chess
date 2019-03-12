@@ -167,18 +167,18 @@ func parsePieceInRank(piece byte) error {
 }
 
 func parseCastling(fenCastling string) (castlingState, error) {
-	var retVal castlingState
+	retVal := make(castlingState)
 	var err error
 	for cntr := 0; cntr < len(fenCastling) && err == nil; cntr++ {
 		switch fenCastling[cntr] {
 		case 'K':
-			retVal.white |= ksideCastleMove
+			retVal[white] |= ksideCastleMove
 		case 'Q':
-			retVal.white |= qsideCastleMove
+			retVal[white] |= qsideCastleMove
 		case 'k':
-			retVal.black |= ksideCastleMove
+			retVal[black] |= ksideCastleMove
 		case 'q':
-			retVal.black |= qsideCastleMove
+			retVal[black] |= qsideCastleMove
 		case '-':
 			break
 		default:
