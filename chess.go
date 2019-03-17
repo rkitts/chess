@@ -156,8 +156,8 @@ type historyEntry struct {
 	turn            PieceColor
 	castling        castlingState
 	enpassantSquare int
-	halfMoves       int32
-	moveNumber      int32
+	halfMoves       int
+	moveNumber      int
 }
 
 // Chess defines the current structure of a chess game
@@ -404,6 +404,118 @@ func (chess *Chess) buildMove(from int, to int, flags int, promotionType PieceTy
 	return retVal
 }
 
+func (chess *Chess) makeMove(moveToMake Move) {
+	chess.pushHistory(moveToMake)
+
+	ourColor := chess.turn
+	theirColor := swapColor(ourColor)
+
+	chess.board[moveToMake.to] = chess.board[moveToMake.from]
+
+	if moveToMake.flags&enpassantMove != 0 {
+		if ourColor == black {
+			chess.board[moveToMake.to-16] = Piece{}
+		} else {
+			chess.board[moveToMake.to+16] = Piece{}
+		}
+	}
+
+	if moveToMake.flags&promotionMove != 0 {
+		chess.board[moveToMake.to] = Piece{pcolor: ourColor, ptype: moveToMake.promotedType}
+	}
+
+	if chess.board[moveToMake.to].ptype == king {
+		chess.kings[ourColor] = moveToMake.to
+
+		if moveToMake.flags&ksideCastleMove != 0 {
+			// Move the rook next to the king
+			castlingTo := moveToMake.to - 1
+			castlingFrom := moveToMake.to + 1
+			chess.board[castlingTo] = chess.board[castlingFrom]
+			chess.board[castlingFrom] = Piece{}
+		} else if moveToMake.flags&qsideCastleMove != 0 {
+			castlingTo := moveToMake.to + 1
+			castlingFrom := moveToMake.to - 2
+			chess.board[castlingTo] = chess.board[castlingFrom]
+			chess.board[castlingFrom] = Piece{}
+		}
+		chess.castling[ourColor] = 0
+	}
+
+	// Turn off castling if we move a rook
+	if chess.castling[ourColor] != 0 {
+		rLength := len(rooks[ourColor])
+		for cntr := 0; cntr < rLength; cntr++ {
+			if moveToMake.from == rooks[ourColor][cntr][0] &&
+				chess.castling[ourColor]&rooks[ourColor][cntr][1] != 0 {
+				chess.castling[ourColor] ^= rooks[ourColor][cntr][1]
+				break
+			}
+		}
+	}
+
+	// Turn off castling if we capture a rook
+	if chess.castling[theirColor] != 0 {
+		rLength := len(rooks[theirColor])
+		for cntr := 0; cntr < rLength; cntr++ {
+			if moveToMake.to == rooks[theirColor][cntr][0] &&
+				chess.castling[theirColor]&rooks[theirColor][cntr][1] != 0 {
+				chess.castling[theirColor] ^= rooks[theirColor][cntr][1]
+				break
+			}
+		}
+	}
+
+	chess.updateEnpassantSquare(moveToMake)
+	chess.updateMoveCounters(moveToMake)
+	chess.turn = swapColor(ourColor)
+}
+
+func (chess *Chess) updateMoveCounters(move Move) {
+	/* reset the 50 move counter if a pawn is moved or a piece is captured */
+	if move.ptype == pawn {
+		chess.halfMoves = 0
+	} else if (move.flags & (captureMove | enpassantMove)) != 0 {
+		chess.halfMoves = 0
+	} else {
+		chess.halfMoves++
+	}
+
+	if move.turn == black {
+		chess.moveNumber++
+	}
+}
+
+func (chess *Chess) updateEnpassantSquare(move Move) {
+	// If big pawn move, update the enpassant square
+	if move.flags&bigPawnMove != 0 {
+		if move.turn == black {
+			chess.enpassantSquare = move.to - 16
+		} else {
+			chess.enpassantSquare = move.to + 16
+		}
+	} else {
+		chess.enpassantSquare = emptySquare
+	}
+}
+
+func (chess *Chess) pushHistory(move Move) {
+	var entry historyEntry
+
+	entry.halfMoves = chess.halfMoves
+	entry.moveNumber = chess.moveNumber
+	entry.enpassantSquare = chess.enpassantSquare
+	entry.move = move
+	entry.turn = chess.turn
+	entry.kings = make(kingsLocation)
+	entry.kings[white] = chess.kings[white]
+	entry.kings[black] = chess.kings[black]
+	entry.castling = make(castlingState)
+	entry.castling[white] = chess.castling[white]
+	entry.castling[black] = chess.castling[black]
+	chess.history = append(chess.history, entry)
+}
+
 func (chess *Chess) generateMoves(legalMoves bool, singleSquareName string) []Move {
 	var retVal []Move
 
@@ -431,6 +543,10 @@ func (chess *Chess) generateMoves(legalMoves bool, singleSquareName string) []Mo
 		singleSquare := firstSquare == lastSquare
 		if !singleSquare || lastSquare == chess.kings[ourColor] {
 			retVal = append(retVal, chess.getCastlingMoves(ourColor)...)
+		}
+
+		if legalMoves {
+
 		}
 	}
 	return retVal

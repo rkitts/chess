@@ -5,6 +5,234 @@ import (
 	"testing"
 )
 
+func TestCapturingRookTurnsOffCastling(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	chess.turn = white
+	chess.board[squareNameToID["h1"]] = Piece{pcolor: white, ptype: rook}
+	chess.board[squareNameToID["a1"]] = Piece{pcolor: white, ptype: rook}
+	chess.castling[white] = (ksideCastleMove | qsideCastleMove)
+
+	var move Move
+	move.from = squareNameToID["h1"]
+	move.to = squareNameToID["g1"]
+	move.ptype = rook
+	chess.makeMove(move)
+}
+func TestMovingRookTurnsOffCasling(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	chess.turn = white
+	chess.board[squareNameToID["h1"]] = Piece{pcolor: white, ptype: rook}
+	chess.board[squareNameToID["a1"]] = Piece{pcolor: white, ptype: rook}
+	chess.castling[white] = (ksideCastleMove | qsideCastleMove)
+
+	var move Move
+	move.from = squareNameToID["h1"]
+	move.to = squareNameToID["g1"]
+	move.ptype = rook
+	chess.makeMove(move)
+
+	if chess.castling[white]&ksideCastleMove != 0 {
+		t.Errorf("Expected castling to be turned off on king side")
+	}
+	if chess.castling[white]&qsideCastleMove == 0 {
+		t.Errorf("Expected castling to remain on for queen side")
+	}
+	move.from = squareNameToID["a1"]
+	move.to = squareNameToID["b1"]
+	chess.turn = white
+	chess.makeMove(move)
+
+	if chess.castling[white]&qsideCastleMove != 0 {
+		t.Errorf("Expected castling to be turned off on queen side")
+	}
+}
+func TestMovingCastling(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	chess.board[squareNameToID["e1"]] = Piece{pcolor: white, ptype: king}
+	chess.board[squareNameToID["h1"]] = Piece{pcolor: white, ptype: rook}
+	chess.kings[white] = squareNameToID["e1"]
+	chess.castling[white] = ksideCastleMove
+
+	var move Move
+	move.ptype = king
+	move.turn = white
+	move.flags = ksideCastleMove
+	move.to = squareNameToID["g1"]
+	move.from = squareNameToID["e1"]
+	chess.makeMove(move)
+	if chess.board[squareNameToID["f1"]].ptype != rook {
+		t.Errorf("Expected rook at f1 but got %v", chess.board[squareNameToID["f1"]])
+	}
+
+	if chess.castling[white] != 0 {
+		t.Errorf("Expected castling to be disabled")
+	}
+
+	if chess.kings[white] != move.to {
+		t.Errorf("Expected kings to be %d, but was %d", move.to, chess.kings[white])
+	}
+}
+
+func TestMakeMoveChangesTurn(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	var move Move
+	move.to = squareNameToID["a8"]
+	move.flags = promotionMove
+	move.turn = white
+	move.promotedType = queen
+	chess.makeMove(move)
+	if chess.turn != black {
+		t.Errorf("Expected black")
+	}
+}
+
+func TestMakeMovePromotes(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	var move Move
+	move.to = squareNameToID["a8"]
+	move.flags = promotionMove
+	move.turn = white
+	move.promotedType = queen
+
+	if !chess.board[squareNameToID["a8"]].isUnspecified() {
+		t.Errorf("Promotion square is occupied")
+	}
+	chess.makeMove(move)
+	expected := Piece{pcolor: white, ptype: queen}
+	actual := chess.board[squareNameToID["a8"]]
+	if actual != expected {
+		t.Errorf("Expected %v but got %v", expected, actual)
+	}
+}
+
+func TestUpdateMoveCounters(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	var move Move
+	move.ptype = pawn
+	move.turn = white
+	chess.halfMoves = 23
+	chess.moveNumber = 0
+	chess.updateMoveCounters(move)
+
+	if chess.halfMoves != 0 {
+		t.Errorf("Expected half moves to be 0 was %d", chess.halfMoves)
+	}
+	if chess.moveNumber != 0 {
+		t.Errorf("Expected moveNumber to be 0 was %d", chess.moveNumber)
+	}
+
+	move.ptype = rook
+	move.flags = captureMove
+	chess.halfMoves = 23
+	chess.updateMoveCounters(move)
+	if chess.halfMoves != 0 {
+		t.Errorf("Expected half moves to be 0 was %d", chess.halfMoves)
+	}
+
+	move.ptype = rook
+	move.flags = enpassantMove
+	chess.halfMoves = 23
+	chess.updateMoveCounters(move)
+	if chess.halfMoves != 0 {
+		t.Errorf("Expected half moves to be 0 was %d", chess.halfMoves)
+	}
+
+	move.flags = 0
+	move.turn = black
+	chess.halfMoves = 0
+	chess.moveNumber = 0
+	chess.updateMoveCounters(move)
+	if chess.halfMoves != 1 {
+		t.Errorf("Expected half moves to be 1 was %d", chess.halfMoves)
+	}
+	if chess.moveNumber != 1 {
+		t.Errorf("Expected moveNumber to be 1 was %d", chess.moveNumber)
+	}
+}
+
+func TestUpdateEnpassantSquare(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	var move Move
+	move.flags = bigPawnMove
+	move.turn = white
+	move.to = squareNameToID["d4"]
+
+	chess.updateEnpassantSquare(move)
+	if chess.enpassantSquare != squareNameToID["d3"] {
+		t.Errorf("Expected square to be %d but was %d", squareNameToID["d3"], chess.enpassantSquare)
+	}
+
+	move.turn = black
+	chess.updateEnpassantSquare(move)
+	if chess.enpassantSquare != squareNameToID["d5"] {
+		t.Errorf("Expected square to be %d but was %d", squareNameToID["d5"], chess.enpassantSquare)
+	}
+
+	move.flags = 0
+	chess.enpassantSquare = squareNameToID["a2"]
+	chess.updateEnpassantSquare(move)
+	if chess.enpassantSquare != emptySquare {
+		t.Errorf("Expected square to be empty but was %d", chess.enpassantSquare)
+	}
+}
+
+func TestMakeMoveRemovesEnpassantCapturedPiece(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	chess.board[squareNameToID["b5"]] = Piece{pcolor: white, ptype: pawn}
+	chess.board[squareNameToID["c5"]] = Piece{pcolor: black, ptype: pawn}
+
+	var move Move
+	move.flags = enpassantMove
+	move.from = squareNameToID["b5"]
+	move.to = squareNameToID["c6"]
+	move.turn = white
+	move.ptype = pawn
+	if chess.board[squareNameToID["c5"]].isUnspecified() {
+		t.Errorf("Expected square to be occupied")
+	}
+	chess.makeMove(move)
+	if !chess.board[squareNameToID["c5"]].isUnspecified() {
+		t.Errorf("Expected square to be unoccupied")
+	}
+
+}
+
+func TestMakeMoveAddsToHistory(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	chess.board[squareNameToID["b5"]] = Piece{pcolor: white, ptype: pawn}
+
+	var move Move
+	move.from = squareNameToID["b5"]
+	move.to = squareNameToID["b6"]
+	move.turn = white
+	move.ptype = pawn
+	start := len(chess.history)
+	chess.makeMove(move)
+	actual := len(chess.history)
+
+	if actual != start+1 {
+		t.Errorf("Move not added to history")
+	}
+}
+
 func TestCastlingHonorsAttackedSquares(t *testing.T) {
 	chess := New()
 	chess.Clear()
