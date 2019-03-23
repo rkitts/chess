@@ -2,8 +2,167 @@ package chess
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 )
+
+func TestUndoCastling(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	var move Move
+	move.flags = ksideCastleMove
+	move.to = squareNameToID["a6"]
+	expected := Piece{pcolor: white, ptype: rook}
+	chess.board[move.to-1] = expected
+	chess.undoCastling(move)
+
+	if chess.board[squareNameToID["b6"]] != expected {
+		t.Errorf("Expected %v but got %v", expected, chess.board[squareNameToID["b6"]])
+	}
+
+	chess.Clear()
+	move.flags = qsideCastleMove
+	move.to = squareNameToID["d1"]
+	chess.board[move.to+1] = expected
+	chess.undoCastling(move)
+
+	if chess.board[squareNameToID["b1"]] != expected {
+		t.Errorf("Expected %v but got %v", expected, chess.board[squareNameToID["b1"]])
+	}
+}
+
+func TestUndoCapture(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	var move Move
+	move.flags = captureMove
+	move.to = squareNameToID["a1"]
+	move.capturedType = pawn
+	move.turn = white
+	chess.undoCapture(move)
+
+	expected := Piece{ptype: pawn, pcolor: black}
+
+	if chess.board[squareNameToID["a1"]] != expected {
+		t.Errorf("Expected %v but got %v", expected, chess.board[squareNameToID["a1"]])
+	}
+
+	chess.Clear()
+	var move2 Move
+	move2.flags = enpassantMove
+	move2.to = squareNameToID["b5"]
+	move2.turn = white
+	chess.undoCapture(move2)
+
+	if chess.board[squareNameToID["b4"]] != expected {
+		t.Errorf("Expected %v but got %v", expected, chess.board[squareNameToID["a1"]])
+	}
+}
+
+func TestApplyHistoryMove(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	var move Move
+	move.from = squareNameToID["a1"]
+	move.to = squareNameToID["a8"]
+	move.ptype = pawn
+
+	chess.board[squareNameToID["a8"]] = Piece{ptype: rook, pcolor: white}
+
+	chess.applyHistoryMove(move)
+
+	if !chess.board[squareNameToID["a8"]].isUnspecified() {
+		t.Errorf("Expeced a8 to be unoccupied, was %v", chess.board[squareNameToID["a8"]])
+	}
+
+	if chess.board[squareNameToID["a1"]].isUnspecified() {
+		t.Errorf("Expected a1 to be occupied")
+	}
+
+	if chess.board[squareNameToID["a1"]].ptype != pawn {
+		t.Errorf("Expected a1 to be a pawn, but was %d", chess.board[squareNameToID["a1"]].ptype)
+	}
+}
+
+func TestApplyHistoryEntryRestoresMembers(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	var history historyEntry
+
+	history.kings = make(kingsLocation)
+	history.kings[white] = squareNameToID["a1"]
+	chess.kings[white] = squareNameToID["h1"]
+	history.kings[black] = squareNameToID["a8"]
+	chess.kings[black] = squareNameToID["h8"]
+
+	expectedTurn := black
+	history.turn = expectedTurn
+	chess.turn = white
+
+	history.castling = make(castlingState)
+	history.castling[white] = ksideCastleMove
+	chess.castling[white] = qsideCastleMove
+	history.castling[black] = qsideCastleMove
+	chess.castling[black] = ksideCastleMove
+
+	history.enpassantSquare = squareNameToID["h8"]
+	chess.enpassantSquare = squareNameToID["e1"]
+
+	history.halfMoves = 30
+	chess.halfMoves = -1
+	history.moveNumber = 15
+	chess.moveNumber = -10
+	chess.applyHistoryEntry(history)
+
+	if !reflect.DeepEqual(history.kings, chess.kings) {
+		t.Errorf("Kings are different; expected %v, got %v", history.kings, chess.kings)
+	}
+
+	if !reflect.DeepEqual(history.castling, chess.castling) {
+		t.Errorf("Kings are different; expected %v, got %v", history.castling, chess.castling)
+	}
+
+	if chess.enpassantSquare != history.enpassantSquare {
+		t.Errorf("Enpassant squares are different; expected %d, got %d", history.enpassantSquare, chess.enpassantSquare)
+	}
+
+	if chess.halfMoves != history.halfMoves {
+		t.Errorf("Enpassant squares are different; expected %d, got %d", history.enpassantSquare, chess.enpassantSquare)
+	}
+
+	if chess.moveNumber != history.moveNumber {
+		t.Errorf("Enpassant squares are different; expected %d, got %d", history.enpassantSquare, chess.enpassantSquare)
+	}
+}
+
+func TestGameEndings(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	chess.turn = black
+	chess.board[squareNameToID["a1"]] = Piece{pcolor: white, ptype: king}
+	chess.kings[white] = squareNameToID["a1"]
+	chess.board[squareNameToID["a2"]] = Piece{pcolor: black, ptype: queen}
+
+	if !chess.kingAttacked(white) {
+		t.Errorf("Expected king to be attacked")
+	}
+	chess.turn = white
+	if !chess.inCheck() {
+		t.Errorf("Expected to be in check")
+	}
+	if chess.inCheckmate() {
+		t.Errorf("Expected to not be in checkmate")
+	}
+	chess.board[squareNameToID["a3"]] = Piece{pcolor: black, ptype: rook}
+	if !chess.inCheckmate() {
+		t.Errorf("Expected to be in checkmate")
+	}
+}
 
 func TestCapturingRookTurnsOffCastling(t *testing.T) {
 	chess := New()
@@ -224,9 +383,9 @@ func TestMakeMoveAddsToHistory(t *testing.T) {
 	move.to = squareNameToID["b6"]
 	move.turn = white
 	move.ptype = pawn
-	start := len(chess.history)
+	start := chess.history.Len()
 	chess.makeMove(move)
-	actual := len(chess.history)
+	actual := chess.history.Len()
 
 	if actual != start+1 {
 		t.Errorf("Move not added to history")
@@ -494,7 +653,7 @@ func TestUpdateSetupWithDefaultPosition(t *testing.T) {
 
 func TestUpdateSetupDoesNothingIfHistoryPresent(t *testing.T) {
 	chess := New()
-	chess.history = append(chess.history, historyEntry{})
+	chess.history.Push(historyEntry{})
 	chess.header["SetUp"] = "Expected"
 	chess.header["FEN"] = "Expected"
 	chess.updateSetup(defaultPosition)

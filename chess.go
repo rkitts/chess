@@ -169,7 +169,7 @@ type Chess struct {
 	moveNumber      int
 	castling        castlingState
 	kings           kingsLocation
-	history         []historyEntry
+	history         Stack
 	header          map[string]string
 }
 
@@ -289,12 +289,78 @@ func (chess *Chess) Clear() {
 	chess.kings = kingsLocation{white: emptySquare, black: emptySquare}
 	chess.kings[black] = emptySquare
 	chess.kings[white] = emptySquare
-	chess.history = make([]historyEntry, 0)
 	chess.header = make(map[string]string)
 }
 
+// UndoMove takes the most recently pushed history item and undoes it's effects
+func (chess *Chess) UndoMove() (Move, bool) {
+	var retVal Move
+	foundOne := false
+	if chess.history.Len() != 0 {
+		history := chess.history.Pop().(historyEntry)
+		foundOne = true
+
+		chess.applyHistoryEntry(history)
+		chess.applyHistoryMove(history.move)
+		chess.undoCapture(history.move)
+		chess.undoCastling(history.move)
+		retVal = history.move
+	}
+	return retVal, foundOne
+}
+
+func (chess *Chess) undoCastling(move Move) {
+	if move.flags&(ksideCastleMove|qsideCastleMove) != 0 {
+		var castlingTo int
+		var castlingFrom int
+
+		if move.flags&ksideCastleMove != 0 {
+			castlingTo = move.to + 1
+			castlingFrom = move.to - 1
+		} else if move.flags&qsideCastleMove != 0 {
+			castlingTo = move.to - 2
+			castlingFrom = move.to + 1
+		}
+
+		chess.board[castlingTo] = chess.board[castlingFrom]
+		chess.board[castlingFrom] = Piece{}
+	}
+}
+
+func (chess *Chess) undoCapture(move Move) {
+	ourColor := move.turn
+	theirColor := swapColor(ourColor)
+	if move.flags&captureMove != 0 {
+		chess.board[move.to] = Piece{ptype: move.capturedType, pcolor: theirColor}
+	} else if move.flags&enpassantMove != 0 {
+		var index int
+		if ourColor == black {
+			index = move.to - 16
+		} else {
+			index = move.to + 16
+		}
+		chess.board[index] = Piece{ptype: pawn, pcolor: theirColor}
+	}
+}
+
+func (chess *Chess) applyHistoryMove(moveToUndo Move) {
+	chess.board[moveToUndo.from] = chess.board[moveToUndo.to]
+	// Undo any promotions
+	chess.board[moveToUndo.from].ptype = moveToUndo.ptype
+	chess.board[moveToUndo.to] = Piece{}
+}
+
+func (chess *Chess) applyHistoryEntry(history historyEntry) {
+	chess.kings = history.kings
+	chess.turn = history.turn
+	chess.castling = history.castling
+	chess.enpassantSquare = history.enpassantSquare
+	chess.halfMoves = history.halfMoves
+	chess.moveNumber = history.moveNumber
+}
+
 func (chess *Chess) updateSetup(fen string) {
-	if len(chess.history) == 0 {
+	if chess.history.Len() == 0 {
 		if fen != defaultPosition {
 			chess.header["SetUp"] = "1"
 			chess.header["FEN"] = fen
@@ -513,15 +579,16 @@ func (chess *Chess) pushHistory(move Move) {
 	entry.castling = make(castlingState)
 	entry.castling[white] = chess.castling[white]
 	entry.castling[black] = chess.castling[black]
-	chess.history = append(chess.history, entry)
+	chess.history.Push(entry)
 }
 
 func (chess *Chess) generateMoves(legalMoves bool, singleSquareName string) []Move {
-	var retVal []Move
 
+	var retVal []Move
 	ourColor := chess.turn
 	firstSquare, lastSquare, err := chess.determineSquareRange(singleSquareName)
 	if err == nil {
+		var allMoves []Move
 		for cntr := firstSquare; cntr <= lastSquare; cntr++ {
 			if cntr&0x88 != 0 {
 				cntr += 7
@@ -533,20 +600,27 @@ func (chess *Chess) generateMoves(legalMoves bool, singleSquareName string) []Mo
 			}
 			if currPiece.ptype == pawn {
 				// Pawn moves...
-				retVal = append(retVal, chess.getPawnMoves(cntr, ourColor)...)
-				retVal = append(retVal, chess.getPawnAttacks(cntr, ourColor)...)
+				allMoves = append(allMoves, chess.getPawnMoves(cntr, ourColor)...)
+				allMoves = append(allMoves, chess.getPawnAttacks(cntr, ourColor)...)
 			} else {
-				retVal = append(retVal, chess.getPieceMoves(cntr, currPiece)...)
+				allMoves = append(allMoves, chess.getPieceMoves(cntr, currPiece)...)
 			}
 		}
 
 		singleSquare := firstSquare == lastSquare
 		if !singleSquare || lastSquare == chess.kings[ourColor] {
-			retVal = append(retVal, chess.getCastlingMoves(ourColor)...)
+			allMoves = append(allMoves, chess.getCastlingMoves(ourColor)...)
 		}
 
 		if legalMoves {
-
+			for _, move := range allMoves {
+				chess.makeMove(move)
+				if !chess.kingAttacked(chess.turn) {
+					retVal = append(retVal, move)
+				}
+			}
+		} else {
+			retVal = allMoves
 		}
 	}
 	return retVal
@@ -706,6 +780,26 @@ func (chess *Chess) attacked(colorAttacking PieceColor, squareNumAttacked int) b
 		}
 	}
 
+	return retVal
+}
+
+func (chess *Chess) kingAttacked(color PieceColor) bool {
+	retVal := chess.attacked(swapColor(color), chess.kings[color])
+	return retVal
+}
+
+func (chess *Chess) inCheck() bool {
+	retVal := chess.kingAttacked(chess.turn)
+	return retVal
+}
+
+func (chess *Chess) inCheckmate() bool {
+	retVal := chess.inCheck() && len(chess.generateMoves(true, "")) == 0
+	return retVal
+}
+
+func (chess *Chess) inStalemate() bool {
+	retVal := !chess.inCheck() && len(chess.generateMoves(true, "")) == 0
 	return retVal
 }
 
