@@ -171,6 +171,7 @@ type Chess struct {
 	kings           kingsLocation
 	history         Stack
 	header          map[string]string
+	positionToCount map[string]int
 }
 
 // New creates a new Chess instance initialized to the starting/default chess position
@@ -290,6 +291,7 @@ func (chess *Chess) Clear() {
 	chess.kings[black] = emptySquare
 	chess.kings[white] = emptySquare
 	chess.header = make(map[string]string)
+	chess.positionToCount = make(map[string]int)
 }
 
 // UndoMove takes the most recently pushed history item and undoes it's effects
@@ -300,6 +302,8 @@ func (chess *Chess) UndoMove() (Move, bool) {
 		history := chess.history.Pop().(historyEntry)
 		foundOne = true
 
+		chess.removeFromPositionCount()
+
 		chess.applyHistoryEntry(history)
 		chess.applyHistoryMove(history.move)
 		chess.undoCapture(history.move)
@@ -307,6 +311,12 @@ func (chess *Chess) UndoMove() (Move, bool) {
 		retVal = history.move
 	}
 	return retVal, foundOne
+}
+
+func (chess *Chess) removeFromPositionCount() {
+	fen := chess.generateFen()
+	fen = fen[:len(fen)-4]
+	chess.positionToCount[fen]--
 }
 
 func (chess *Chess) undoCastling(move Move) {
@@ -534,7 +544,16 @@ func (chess *Chess) makeMove(moveToMake Move) {
 
 	chess.updateEnpassantSquare(moveToMake)
 	chess.updateMoveCounters(moveToMake)
+	chess.board[moveToMake.from] = Piece{}
 	chess.turn = swapColor(ourColor)
+
+	chess.addToPositionCount()
+}
+
+func (chess *Chess) addToPositionCount() {
+	fen := chess.generateFen()
+	fen = fen[:len(fen)-4]
+	chess.positionToCount[fen]++
 }
 
 func (chess *Chess) updateMoveCounters(move Move) {
@@ -837,6 +856,17 @@ func (chess *Chess) insufficientMaterial() bool {
 		// kb vs kb if both bishops are on the same color. This could be done better
 		if (colorToBishops[white] == 0 && colorToBishops[black] != 0) || (colorToBishops[white] != 0 && colorToBishops[black] == 0) {
 			retVal = true
+		}
+	}
+	return retVal
+}
+
+func (chess *Chess) inThreefoldRepition() bool {
+	retVal := false
+	for _, count := range chess.positionToCount {
+		if count >= 3 {
+			retVal = true
+			break
 		}
 	}
 	return retVal

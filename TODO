@@ -1,1 +1,3 @@
-- Implement legalMoves handling in chess::genrateMoves
+- Implement inDraw()
+- Implement gameOver()
+- Restucture source so it's idomatically correct

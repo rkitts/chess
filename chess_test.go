@@ -6,6 +6,83 @@ import (
 	"testing"
 )
 
+func TestUndoMovesGetsOutOfThreefoldRep(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	chess.board[squareNameToID["a1"]] = Piece{pcolor: white, ptype: rook}
+	chess.board[squareNameToID["h1"]] = Piece{pcolor: black, ptype: rook}
+
+	chess.turn = white
+	move := chess.buildMove(squareNameToID["a1"], squareNameToID["a8"], 0, 0)
+	chess.makeMove(move)
+	move = chess.buildMove(squareNameToID["h1"], squareNameToID["h8"], 0, 0)
+	chess.makeMove(move)
+
+	move = chess.buildMove(squareNameToID["a8"], squareNameToID["a1"], 0, 0)
+	chess.makeMove(move)
+	move = chess.buildMove(squareNameToID["h8"], squareNameToID["h1"], 0, 0)
+	chess.makeMove(move)
+
+	move = chess.buildMove(squareNameToID["a1"], squareNameToID["a8"], 0, 0)
+	chess.makeMove(move)
+	move = chess.buildMove(squareNameToID["h1"], squareNameToID["h8"], 0, 0)
+	chess.makeMove(move)
+
+	move = chess.buildMove(squareNameToID["a8"], squareNameToID["a1"], 0, 0)
+	chess.makeMove(move)
+	move = chess.buildMove(squareNameToID["h8"], squareNameToID["h1"], 0, 0)
+	chess.makeMove(move)
+
+	move = chess.buildMove(squareNameToID["a1"], squareNameToID["a8"], 0, 0)
+	chess.makeMove(move)
+
+	if !chess.inThreefoldRepition() {
+		t.Errorf("Expected to be in threefold repetition")
+	}
+	chess.UndoMove()
+	if chess.inThreefoldRepition() {
+		t.Errorf("Expected to not be in threefold repetition")
+	}
+}
+
+func TestInThreefoldRepition(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	chess.board[squareNameToID["a1"]] = Piece{pcolor: white, ptype: rook}
+	chess.board[squareNameToID["h1"]] = Piece{pcolor: black, ptype: rook}
+
+	chess.turn = white
+
+	move := chess.buildMove(squareNameToID["a1"], squareNameToID["a8"], 0, 0)
+	chess.makeMove(move)
+	move = chess.buildMove(squareNameToID["h1"], squareNameToID["h8"], 0, 0)
+	chess.makeMove(move)
+
+	move = chess.buildMove(squareNameToID["a8"], squareNameToID["a1"], 0, 0)
+	chess.makeMove(move)
+	move = chess.buildMove(squareNameToID["h8"], squareNameToID["h1"], 0, 0)
+	chess.makeMove(move)
+
+	move = chess.buildMove(squareNameToID["a1"], squareNameToID["a8"], 0, 0)
+	chess.makeMove(move)
+	move = chess.buildMove(squareNameToID["h1"], squareNameToID["h8"], 0, 0)
+	chess.makeMove(move)
+
+	move = chess.buildMove(squareNameToID["a8"], squareNameToID["a1"], 0, 0)
+	chess.makeMove(move)
+	move = chess.buildMove(squareNameToID["h8"], squareNameToID["h1"], 0, 0)
+	chess.makeMove(move)
+
+	move = chess.buildMove(squareNameToID["a1"], squareNameToID["a8"], 0, 0)
+	chess.makeMove(move)
+
+	if !chess.inThreefoldRepition() {
+		t.Errorf("Expected to be in threefold repetition")
+	}
+}
+
 func TestInsufficientMaterial(t *testing.T) {
 	chess := New()
 	chess.Clear()
@@ -311,11 +388,14 @@ func TestMakeMovePromotes(t *testing.T) {
 	chess.Clear()
 
 	var move Move
+
+	move.from = squareNameToID["a7"]
 	move.to = squareNameToID["a8"]
 	move.flags = promotionMove
 	move.turn = white
 	move.promotedType = queen
 
+	chess.board[squareNameToID["a7"]] = Piece{ptype: pawn, pcolor: white}
 	if !chess.board[squareNameToID["a8"]].isUnspecified() {
 		t.Errorf("Promotion square is occupied")
 	}
