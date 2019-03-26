@@ -808,6 +808,24 @@ func (chess *Chess) kingAttacked(color PieceColor) bool {
 	return retVal
 }
 
+// GameOver returns true if we've made more than 100 half moves, in checkmate, in stalemate, insufficient material or in threefold repetition
+func (chess *Chess) GameOver() bool {
+	retVal := chess.halfMoves >= 100 ||
+		chess.inStalemate() ||
+		chess.insufficientMaterial() ||
+		chess.inThreefoldRepition()
+}
+
+// InDraw returns true if we've made more than 100 half moves, in stalemate, insufficient material or in threefold repetition
+func (chess *Chess) InDraw() bool {
+	retVal := chess.halfMoves >= 100 ||
+		chess.inCheckmate() ||
+		chess.inStalemate() ||
+		chess.insufficientMaterial() ||
+		chess.inThreefoldRepition()
+	return retVal
+}
+
 func (chess *Chess) inCheck() bool {
 	retVal := chess.kingAttacked(chess.turn)
 	return retVal
