@@ -6,6 +6,50 @@ import (
 	"testing"
 )
 
+func TestInsufficientMaterial(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	// k vs k
+	chess.board[squareNameToID["a1"]] = Piece{pcolor: white, ptype: king}
+	chess.board[squareNameToID["h1"]] = Piece{pcolor: black, ptype: king}
+	assertInsufficientMaterial(chess, t)
+
+	// kn vs k
+	chess.board[squareNameToID["a2"]] = Piece{pcolor: white, ptype: knight}
+	assertInsufficientMaterial(chess, t)
+
+	// kb vs k
+	chess.board[squareNameToID["a2"]] = Piece{pcolor: white, ptype: bishop}
+	assertInsufficientMaterial(chess, t)
+
+	// kb vs kb with bishops on same color
+	chess.board[squareNameToID["c2"]] = Piece{pcolor: black, ptype: bishop}
+	assertInsufficientMaterial(chess, t)
+}
+
+func assertInsufficientMaterial(chess *Chess, t *testing.T) {
+	if !chess.insufficientMaterial() {
+		t.Errorf("Expected insufficient material for board %s", chess.generateFen())
+	}
+}
+
+func TestInStalemate(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	chess.board[squareNameToID["h8"]] = Piece{pcolor: black, ptype: king}
+	chess.kings[black] = squareNameToID["h8"]
+	chess.board[squareNameToID["f7"]] = Piece{pcolor: white, ptype: king}
+	chess.kings[white] = squareNameToID["f7"]
+	chess.board[squareNameToID["g6"]] = Piece{pcolor: white, ptype: queen}
+
+	chess.turn = black
+	if !chess.inStalemate() {
+		t.Errorf("Expected to be in stalemate")
+	}
+}
+
 func TestUndoCastling(t *testing.T) {
 	chess := New()
 	chess.Clear()

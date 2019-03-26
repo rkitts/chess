@@ -732,7 +732,7 @@ func (chess *Chess) addMove(from int, to int, flags int) []Move {
 func (chess *Chess) attacked(colorAttacking PieceColor, squareNumAttacked int) bool {
 	retVal := false
 
-	for cntr := squareNameToID["a8"]; retVal == false && cntr < squareNameToID["h1"]; cntr++ {
+	for cntr := squareNameToID["a8"]; retVal == false && cntr <= squareNameToID["h1"]; cntr++ {
 		if cntr&0x88 != 0 {
 			cntr += 7
 			continue
@@ -801,6 +801,44 @@ func (chess *Chess) inCheckmate() bool {
 
 func (chess *Chess) inStalemate() bool {
 	retVal := !chess.inCheck() && len(chess.generateMoves(true, "")) == 0
+	return retVal
+}
+
+func (chess *Chess) insufficientMaterial() bool {
+	var pieceTypeToCount = make(map[PieceType]int)
+	var numPieces int
+	squareColor := black
+	var colorToBishops = make(map[PieceColor]int)
+
+	for cntr := squareNameToID["a8"]; cntr <= squareNameToID["h1"]; cntr++ {
+		squareColor = swapColor(squareColor)
+		if (cntr & 0x88) != 0 {
+			cntr += 7
+			continue
+		}
+		piece := chess.board[cntr]
+		if !piece.isUnspecified() {
+			pieceTypeToCount[piece.ptype]++
+			numPieces++
+			if piece.ptype == bishop {
+				colorToBishops[squareColor]++
+			}
+		}
+	}
+
+	retVal := false
+	if numPieces == 2 {
+		// k vs. k
+		retVal = true
+	} else if numPieces == 3 && (pieceTypeToCount[bishop] == 1 || pieceTypeToCount[knight] == 1) {
+		// k vs. kn  or k vs kb
+		retVal = true
+	} else if numPieces == pieceTypeToCount[bishop]+2 {
+		// kb vs kb if both bishops are on the same color. This could be done better
+		if (colorToBishops[white] == 0 && colorToBishops[black] != 0) || (colorToBishops[white] != 0 && colorToBishops[black] == 0) {
+			retVal = true
+		}
+	}
 	return retVal
 }
 
