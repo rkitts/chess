@@ -615,9 +615,10 @@ func (chess *Chess) generateMoves(legalMoves bool, singleSquareName string) []Mo
 		if legalMoves {
 			for _, move := range allMoves {
 				chess.makeMove(move)
-				if !chess.kingAttacked(chess.turn) {
+				if !chess.kingAttacked(ourColor) {
 					retVal = append(retVal, move)
 				}
+				chess.UndoMove()
 			}
 		} else {
 			retVal = allMoves

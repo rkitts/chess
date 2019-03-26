@@ -139,15 +139,15 @@ func TestApplyHistoryEntryRestoresMembers(t *testing.T) {
 	}
 }
 
-func TestGameEndings(t *testing.T) {
+func TestInCheck(t *testing.T) {
 	chess := New()
 	chess.Clear()
 
 	chess.turn = black
 	chess.board[squareNameToID["a1"]] = Piece{pcolor: white, ptype: king}
 	chess.kings[white] = squareNameToID["a1"]
-	chess.board[squareNameToID["a2"]] = Piece{pcolor: black, ptype: queen}
 
+	chess.board[squareNameToID["a2"]] = Piece{pcolor: black, ptype: queen}
 	if !chess.kingAttacked(white) {
 		t.Errorf("Expected king to be attacked")
 	}
@@ -155,10 +155,19 @@ func TestGameEndings(t *testing.T) {
 	if !chess.inCheck() {
 		t.Errorf("Expected to be in check")
 	}
-	if chess.inCheckmate() {
-		t.Errorf("Expected to not be in checkmate")
-	}
-	chess.board[squareNameToID["a3"]] = Piece{pcolor: black, ptype: rook}
+}
+
+func TestInCheckmate(t *testing.T) {
+	chess := New()
+	chess.Clear()
+
+	chess.turn = black
+	chess.board[squareNameToID["a1"]] = Piece{pcolor: white, ptype: king}
+	chess.kings[white] = squareNameToID["a1"]
+	chess.board[squareNameToID["a2"]] = Piece{pcolor: black, ptype: queen}
+	chess.board[squareNameToID["b1"]] = Piece{pcolor: black, ptype: queen}
+
+	chess.turn = white
 	if !chess.inCheckmate() {
 		t.Errorf("Expected to be in checkmate")
 	}
@@ -435,7 +444,7 @@ func TestAttacksWithRook(t *testing.T) {
 	chess := New()
 	chess.Clear()
 	chess.board[squareNameToID["a1"]] = Piece{pcolor: white, ptype: rook}
-	chess.board[squareNameToID["a8"]] = Piece{pcolor: black, ptype: rook}
+	chess.board[squareNameToID["a8"]] = Piece{pcolor: black, ptype: bishop}
 	actual := chess.attacked(white, squareNameToID["a8"])
 	if actual != true {
 		t.Errorf("Expected true, got %v", actual)
