@@ -37,11 +37,11 @@ func TestUndoMovesGetsOutOfThreefoldRep(t *testing.T) {
 	move = chess.buildMove(squareNameToID["a1"], squareNameToID["a8"], 0, 0)
 	chess.makeMove(move)
 
-	if !chess.inThreefoldRepition() {
+	if !chess.InThreefoldRepition() {
 		t.Errorf("Expected to be in threefold repetition")
 	}
-	chess.UndoMove()
-	if chess.inThreefoldRepition() {
+	chess.Undo()
+	if chess.InThreefoldRepition() {
 		t.Errorf("Expected to not be in threefold repetition")
 	}
 }
@@ -78,7 +78,7 @@ func TestInThreefoldRepition(t *testing.T) {
 	move = chess.buildMove(squareNameToID["a1"], squareNameToID["a8"], 0, 0)
 	chess.makeMove(move)
 
-	if !chess.inThreefoldRepition() {
+	if !chess.InThreefoldRepition() {
 		t.Errorf("Expected to be in threefold repetition")
 	}
 }
@@ -106,7 +106,7 @@ func TestInsufficientMaterial(t *testing.T) {
 }
 
 func assertInsufficientMaterial(chess *Chess, t *testing.T) {
-	if !chess.insufficientMaterial() {
+	if !chess.InsufficientMaterial() {
 		t.Errorf("Expected insufficient material for board %s", chess.generateFen())
 	}
 }
@@ -122,7 +122,7 @@ func TestInStalemate(t *testing.T) {
 	chess.board[squareNameToID["g6"]] = Piece{pcolor: white, ptype: queen}
 
 	chess.turn = black
-	if !chess.inStalemate() {
+	if !chess.InStalemate() {
 		t.Errorf("Expected to be in stalemate")
 	}
 }
@@ -195,11 +195,11 @@ func TestApplyHistoryMove(t *testing.T) {
 
 	chess.applyHistoryMove(move)
 
-	if !chess.board[squareNameToID["a8"]].isUnspecified() {
+	if !chess.board[squareNameToID["a8"]].IsUnspecified() {
 		t.Errorf("Expeced a8 to be unoccupied, was %v", chess.board[squareNameToID["a8"]])
 	}
 
-	if chess.board[squareNameToID["a1"]].isUnspecified() {
+	if chess.board[squareNameToID["a1"]].IsUnspecified() {
 		t.Errorf("Expected a1 to be occupied")
 	}
 
@@ -273,7 +273,7 @@ func TestInCheck(t *testing.T) {
 		t.Errorf("Expected king to be attacked")
 	}
 	chess.turn = white
-	if !chess.inCheck() {
+	if !chess.InCheck() {
 		t.Errorf("Expected to be in check")
 	}
 }
@@ -289,7 +289,7 @@ func TestInCheckmate(t *testing.T) {
 	chess.board[squareNameToID["b1"]] = Piece{pcolor: black, ptype: queen}
 
 	chess.turn = white
-	if !chess.inCheckmate() {
+	if !chess.InCheckmate() {
 		t.Errorf("Expected to be in checkmate")
 	}
 }
@@ -396,7 +396,7 @@ func TestMakeMovePromotes(t *testing.T) {
 	move.promotedType = queen
 
 	chess.board[squareNameToID["a7"]] = Piece{ptype: pawn, pcolor: white}
-	if !chess.board[squareNameToID["a8"]].isUnspecified() {
+	if !chess.board[squareNameToID["a8"]].IsUnspecified() {
 		t.Errorf("Promotion square is occupied")
 	}
 	chess.makeMove(move)
@@ -495,11 +495,11 @@ func TestMakeMoveRemovesEnpassantCapturedPiece(t *testing.T) {
 	move.to = squareNameToID["c6"]
 	move.turn = white
 	move.ptype = pawn
-	if chess.board[squareNameToID["c5"]].isUnspecified() {
+	if chess.board[squareNameToID["c5"]].IsUnspecified() {
 		t.Errorf("Expected square to be occupied")
 	}
 	chess.makeMove(move)
-	if !chess.board[squareNameToID["c5"]].isUnspecified() {
+	if !chess.board[squareNameToID["c5"]].IsUnspecified() {
 		t.Errorf("Expected square to be unoccupied")
 	}
 
@@ -734,28 +734,28 @@ func TestBuildMoveDoesEnpassant(t *testing.T) {
 
 func TestRemoveRemoves(t *testing.T) {
 	chess := New()
-	piece := chess.remove("b2")
-	if piece.isUnspecified() {
+	piece := chess.Remove("b2")
+	if piece.IsUnspecified() {
 		t.Errorf("Got an unspecified piece for legal square")
 	}
-	piece = chess.get("b2")
-	if !piece.isUnspecified() {
+	piece = chess.Get("b2")
+	if !piece.IsUnspecified() {
 		t.Errorf("Got an specified piece after removal")
 	}
 }
 
 func TestGetReturnsSpecifiedPiece(t *testing.T) {
 	chess := New()
-	piece := chess.get("b2")
-	if piece.isUnspecified() {
+	piece := chess.Get("b2")
+	if piece.IsUnspecified() {
 		t.Errorf("Got an unspecified piece for legal square")
 	}
 }
 
 func TestGetReturnsUnspecifiedPieceIfBadInput(t *testing.T) {
 	chess := New()
-	piece := chess.get("b9")
-	if piece.isUnspecified() == false {
+	piece := chess.Get("b9")
+	if piece.IsUnspecified() == false {
 		t.Errorf("Expected unspecifed piece, got %+v", piece)
 	}
 }
@@ -845,7 +845,7 @@ func TestGenerateFenWorks(t *testing.T) {
 func TestPuttingToInvalidSquareIsError(t *testing.T) {
 	chess := New()
 	piece := Piece{pcolor: white, ptype: pawn}
-	if err := chess.put(piece, "z2"); err == nil {
+	if err := chess.Put(piece, "z2"); err == nil {
 		t.Errorf("Error not returned")
 	}
 }

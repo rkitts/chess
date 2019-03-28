@@ -178,16 +178,17 @@ type Chess struct {
 func New() *Chess {
 	retVal := new(Chess)
 	retVal.Clear()
-	retVal.load(defaultPosition)
+	retVal.Load(defaultPosition)
 	return (retVal)
 }
 
 // Reset sets the board to the default/starting position
 func (chess *Chess) Reset() {
-	chess.load(defaultPosition)
+	chess.Load(defaultPosition)
 }
 
-func (chess *Chess) get(squareID string) Piece {
+// Get returns the Piece at the given square or an unspecified Piece if the square is unoccupied
+func (chess *Chess) Get(squareID string) Piece {
 	var retVal Piece
 	if squareNum, ok := squareNameToID[squareID]; ok {
 		retVal = chess.board[squareNum]
@@ -195,7 +196,8 @@ func (chess *Chess) get(squareID string) Piece {
 	return retVal
 }
 
-func (chess *Chess) put(piece Piece, squareName string) error {
+// Put puts the given piece on the specified square
+func (chess *Chess) Put(piece Piece, squareName string) error {
 	var retVal error
 
 	if squareID, ok := squareNameToID[squareName]; ok == false {
@@ -210,8 +212,9 @@ func (chess *Chess) put(piece Piece, squareName string) error {
 	return retVal
 }
 
-func (chess *Chess) remove(squareID string) Piece {
-	var retVal = chess.get(squareID)
+// Remove removes the piece from the given square and returns it. An empty square will return an unspecified Piece (Piece.IsUnspecified() == true)
+func (chess *Chess) Remove(squareID string) Piece {
+	var retVal = chess.Get(squareID)
 	if squareNum, ok := squareNameToID[squareID]; ok {
 		var replacementPiece Piece
 		chess.board[squareNum] = replacementPiece
@@ -220,32 +223,11 @@ func (chess *Chess) remove(squareID string) Piece {
 	return retVal
 }
 
-func (chess *Chess) maybeUpdateKings(piece Piece, squareID int) error {
-
-	var retVal error
-
-	if piece.ptype == king {
-		switch piece.pcolor {
-		case white:
-			if chess.kings[white] == emptySquare {
-				chess.kings[white] = squareID
-			} else if chess.kings[white] != squareID {
-				retVal = fmt.Errorf("White king already on board")
-			}
-		case black:
-			if chess.kings[black] == emptySquare {
-				chess.kings[black] = squareID
-			} else if chess.kings[black] != squareID {
-				retVal = fmt.Errorf("Black king already on board")
-			}
-		}
-	}
-	return retVal
-}
-
-func (chess *Chess) load(fenToLoad string) error {
+// Load clears the board and sets up the board according to the FEN encoded string if it is legal FEN
+func (chess *Chess) Load(fenToLoad string) error {
 	fen, err := parseFEN(fenToLoad)
 	if err == nil {
+		chess.Clear()
 		square := 0
 		for cntr := 0; cntr < len(fen.piecePlacement); cntr++ {
 			maybePiece := fen.piecePlacement[cntr]
@@ -262,7 +244,7 @@ func (chess *Chess) load(fenToLoad string) error {
 				// TODO: This is terrible. Somehow make it so PieceType is a little more
 				// robust instead of this upper/lowercase crap.
 				pieceType := PieceType(unicode.ToLower(rune(maybePiece)))
-				chess.put(Piece{pieceType, color}, algebraic(square))
+				chess.Put(Piece{pieceType, color}, algebraic(square))
 				square++
 			}
 		}
@@ -294,8 +276,8 @@ func (chess *Chess) Clear() {
 	chess.positionToCount = make(map[string]int)
 }
 
-// UndoMove takes the most recently pushed history item and undoes it's effects
-func (chess *Chess) UndoMove() (Move, bool) {
+// Undo takes the most recently pushed history item and undoes it's effects
+func (chess *Chess) Undo() (Move, bool) {
 	var retVal Move
 	foundOne := false
 	if chess.history.Len() != 0 {
@@ -311,6 +293,85 @@ func (chess *Chess) UndoMove() (Move, bool) {
 		retVal = history.move
 	}
 	return retVal, foundOne
+}
+
+// Moves returns all the moves available for the board, the specified single square or the legal moves for either of those
+func (chess *Chess) Moves(legalMoves bool, singleSquareName string) []Move {
+	var retVal []Move
+	ourColor := chess.turn
+	firstSquare, lastSquare, err := chess.determineSquareRange(singleSquareName)
+	if err == nil {
+		var allMoves []Move
+		for cntr := firstSquare; cntr <= lastSquare; cntr++ {
+			if cntr&0x88 != 0 {
+				cntr += 7
+				continue
+			}
+			currPiece := chess.board[cntr]
+			if currPiece.IsUnspecified() || currPiece.pcolor != ourColor {
+				continue
+			}
+			if currPiece.ptype == pawn {
+				// Pawn moves...
+				allMoves = append(allMoves, chess.getPawnMoves(cntr, ourColor)...)
+				allMoves = append(allMoves, chess.getPawnAttacks(cntr, ourColor)...)
+			} else {
+				allMoves = append(allMoves, chess.getPieceMoves(cntr, currPiece)...)
+			}
+		}
+
+		singleSquare := firstSquare == lastSquare
+		if !singleSquare || lastSquare == chess.kings[ourColor] {
+			allMoves = append(allMoves, chess.getCastlingMoves(ourColor)...)
+		}
+
+		if legalMoves {
+			for _, move := range allMoves {
+				chess.makeMove(move)
+				if !chess.kingAttacked(ourColor) {
+					retVal = append(retVal, move)
+				}
+				chess.Undo()
+			}
+		} else {
+			retVal = allMoves
+		}
+	}
+	return retVal
+}
+
+// Turn returns the color of the side to move
+func (chess *Chess) Turn() PieceColor {
+	return chess.turn
+}
+
+// IsUnspecified returns true if this the piece given is doesn't have a type or a color
+func (p *Piece) IsUnspecified() bool {
+	retVal := p.pcolor == 0 || p.ptype == 0
+	return (retVal)
+}
+
+func (chess *Chess) maybeUpdateKings(piece Piece, squareID int) error {
+
+	var retVal error
+
+	if piece.ptype == king {
+		switch piece.pcolor {
+		case white:
+			if chess.kings[white] == emptySquare {
+				chess.kings[white] = squareID
+			} else if chess.kings[white] != squareID {
+				retVal = fmt.Errorf("White king already on board")
+			}
+		case black:
+			if chess.kings[black] == emptySquare {
+				chess.kings[black] = squareID
+			} else if chess.kings[black] != squareID {
+				retVal = fmt.Errorf("Black king already on board")
+			}
+		}
+	}
+	return retVal
 }
 
 func (chess *Chess) removeFromPositionCount() {
@@ -387,7 +448,7 @@ func (chess *Chess) generateFen() string {
 	for rankValue := 0; rankValue <= 112; rankValue += 16 {
 		for fileValue := 0; fileValue < 8; fileValue++ {
 			squareID := squareNameToID[algebraic(rankValue+fileValue)]
-			if chess.board[squareID].isUnspecified() {
+			if chess.board[squareID].IsUnspecified() {
 				emptySquares++
 			} else {
 				if emptySquares > 0 {
@@ -454,11 +515,6 @@ func generateCastlingFEN(castling castlingState) string {
 	return retVal.String()
 }
 
-func (p *Piece) isUnspecified() bool {
-	retVal := p.pcolor == 0 || p.ptype == 0
-	return (retVal)
-}
-
 func (chess *Chess) buildMove(from int, to int, flags int, promotionType PieceType) Move {
 	retVal := Move{
 		turn:  chess.turn,
@@ -472,7 +528,7 @@ func (chess *Chess) buildMove(from int, to int, flags int, promotionType PieceTy
 		retVal.promotedType = promotionType
 	}
 
-	if !chess.board[to].isUnspecified() {
+	if !chess.board[to].IsUnspecified() {
 		retVal.capturedType = chess.board[to].ptype
 	} else if flags&enpassantMove != 0 {
 		retVal.capturedType = pawn
@@ -601,51 +657,6 @@ func (chess *Chess) pushHistory(move Move) {
 	chess.history.Push(entry)
 }
 
-func (chess *Chess) generateMoves(legalMoves bool, singleSquareName string) []Move {
-
-	var retVal []Move
-	ourColor := chess.turn
-	firstSquare, lastSquare, err := chess.determineSquareRange(singleSquareName)
-	if err == nil {
-		var allMoves []Move
-		for cntr := firstSquare; cntr <= lastSquare; cntr++ {
-			if cntr&0x88 != 0 {
-				cntr += 7
-				continue
-			}
-			currPiece := chess.board[cntr]
-			if currPiece.isUnspecified() || currPiece.pcolor != ourColor {
-				continue
-			}
-			if currPiece.ptype == pawn {
-				// Pawn moves...
-				allMoves = append(allMoves, chess.getPawnMoves(cntr, ourColor)...)
-				allMoves = append(allMoves, chess.getPawnAttacks(cntr, ourColor)...)
-			} else {
-				allMoves = append(allMoves, chess.getPieceMoves(cntr, currPiece)...)
-			}
-		}
-
-		singleSquare := firstSquare == lastSquare
-		if !singleSquare || lastSquare == chess.kings[ourColor] {
-			allMoves = append(allMoves, chess.getCastlingMoves(ourColor)...)
-		}
-
-		if legalMoves {
-			for _, move := range allMoves {
-				chess.makeMove(move)
-				if !chess.kingAttacked(ourColor) {
-					retVal = append(retVal, move)
-				}
-				chess.UndoMove()
-			}
-		} else {
-			retVal = allMoves
-		}
-	}
-	return retVal
-}
-
 func (chess *Chess) getCastlingMoves(ourColor PieceColor) []Move {
 	var retVal []Move
 
@@ -653,8 +664,8 @@ func (chess *Chess) getCastlingMoves(ourColor PieceColor) []Move {
 	if chess.castling[ourColor]&ksideCastleMove != 0 {
 		castlingFrom := chess.kings[ourColor]
 		castlingTo := castlingFrom + 2
-		if chess.board[castlingFrom+1].isUnspecified() &&
-			chess.board[castlingTo].isUnspecified() &&
+		if chess.board[castlingFrom+1].IsUnspecified() &&
+			chess.board[castlingTo].IsUnspecified() &&
 			!chess.attacked(theirColor, castlingFrom) &&
 			!chess.attacked(theirColor, castlingFrom+1) &&
 			!chess.attacked(theirColor, castlingTo) {
@@ -664,9 +675,9 @@ func (chess *Chess) getCastlingMoves(ourColor PieceColor) []Move {
 	if chess.castling[ourColor]&qsideCastleMove != 0 {
 		castlingFrom := chess.kings[ourColor]
 		castlingTo := castlingFrom - 2
-		if chess.board[castlingFrom-1].isUnspecified() &&
-			chess.board[castlingTo].isUnspecified() &&
-			chess.board[castlingFrom-3].isUnspecified() &&
+		if chess.board[castlingFrom-1].IsUnspecified() &&
+			chess.board[castlingTo].IsUnspecified() &&
+			chess.board[castlingFrom-3].IsUnspecified() &&
 			!chess.attacked(theirColor, castlingFrom) &&
 			!chess.attacked(theirColor, castlingFrom-1) &&
 			!chess.attacked(theirColor, castlingTo) {
@@ -686,7 +697,7 @@ func (chess *Chess) getPieceMoves(fromSquare int, currPiece Piece) []Move {
 			if squareNum&0x88 != 0 {
 				break
 			}
-			if chess.board[squareNum].isUnspecified() {
+			if chess.board[squareNum].IsUnspecified() {
 				retVal = append(retVal, chess.addMove(fromSquare, squareNum, normalMove)...)
 			} else {
 				if chess.board[squareNum].pcolor != currPiece.pcolor {
@@ -725,10 +736,10 @@ func (chess *Chess) getPawnMoves(fromSquare int, ourColor PieceColor) []Move {
 	var retVal []Move
 
 	squareNum := fromSquare + pawnOffsets[ourColor][0]
-	if chess.board[squareNum].isUnspecified() {
+	if chess.board[squareNum].IsUnspecified() {
 		retVal = append(retVal, chess.addMove(fromSquare, squareNum, normalMove)...)
 		squareNum = fromSquare + pawnOffsets[ourColor][1]
-		if secondRank[ourColor] == rank(fromSquare) && chess.board[squareNum].isUnspecified() {
+		if secondRank[ourColor] == rank(fromSquare) && chess.board[squareNum].IsUnspecified() {
 			retVal = append(retVal, chess.addMove(squareNum, squareNum, bigPawnMove)...)
 		}
 	}
@@ -756,7 +767,7 @@ func (chess *Chess) attacked(colorAttacking PieceColor, squareNumAttacked int) b
 			cntr += 7
 			continue
 		}
-		if chess.board[cntr].isUnspecified() || chess.board[cntr].pcolor != colorAttacking {
+		if chess.board[cntr].IsUnspecified() || chess.board[cntr].pcolor != colorAttacking {
 			continue
 		}
 		piece := chess.board[cntr]
@@ -787,7 +798,7 @@ func (chess *Chess) attacked(colorAttacking PieceColor, squareNumAttacked int) b
 			j := cntr + offset
 			blocked := false
 			for j != squareNumAttacked {
-				if !chess.board[j].isUnspecified() {
+				if !chess.board[j].IsUnspecified() {
 					blocked = true
 					break
 				}
@@ -808,40 +819,45 @@ func (chess *Chess) kingAttacked(color PieceColor) bool {
 	return retVal
 }
 
-// GameOver returns true if we've made more than 100 half moves, in checkmate, in stalemate, insufficient material or in threefold repetition
+// GameOver returns true if we've made more than 100 half moves, in checkmate, in stalemate, insufficient material or in threefold repetition//
 func (chess *Chess) GameOver() bool {
 	retVal := chess.halfMoves >= 100 ||
-		chess.inStalemate() ||
-		chess.insufficientMaterial() ||
-		chess.inThreefoldRepition()
+		chess.InStalemate() ||
+		chess.InsufficientMaterial() ||
+		chess.InThreefoldRepition()
+	return retVal
 }
 
 // InDraw returns true if we've made more than 100 half moves, in stalemate, insufficient material or in threefold repetition
 func (chess *Chess) InDraw() bool {
 	retVal := chess.halfMoves >= 100 ||
-		chess.inCheckmate() ||
-		chess.inStalemate() ||
-		chess.insufficientMaterial() ||
-		chess.inThreefoldRepition()
+		chess.InCheckmate() ||
+		chess.InStalemate() ||
+		chess.InsufficientMaterial() ||
+		chess.InThreefoldRepition()
 	return retVal
 }
 
-func (chess *Chess) inCheck() bool {
+// InCheck returns true if the side to move is in check
+func (chess *Chess) InCheck() bool {
 	retVal := chess.kingAttacked(chess.turn)
 	return retVal
 }
 
-func (chess *Chess) inCheckmate() bool {
-	retVal := chess.inCheck() && len(chess.generateMoves(true, "")) == 0
+// InCheckmate returns true if the side to move is in checkmate
+func (chess *Chess) InCheckmate() bool {
+	retVal := chess.InCheck() && len(chess.Moves(true, "")) == 0
 	return retVal
 }
 
-func (chess *Chess) inStalemate() bool {
-	retVal := !chess.inCheck() && len(chess.generateMoves(true, "")) == 0
+// InStalemate returns true if the side to move is in stalemate
+func (chess *Chess) InStalemate() bool {
+	retVal := !chess.InCheck() && len(chess.Moves(true, "")) == 0
 	return retVal
 }
 
-func (chess *Chess) insufficientMaterial() bool {
+// InsufficientMaterial returnsif the game is drawn due to insufficient material (K vs. K, K vs. KB, or K vs. KN); otherwise false.
+func (chess *Chess) InsufficientMaterial() bool {
 	var pieceTypeToCount = make(map[PieceType]int)
 	var numPieces int
 	squareColor := black
@@ -854,7 +870,7 @@ func (chess *Chess) insufficientMaterial() bool {
 			continue
 		}
 		piece := chess.board[cntr]
-		if !piece.isUnspecified() {
+		if !piece.IsUnspecified() {
 			pieceTypeToCount[piece.ptype]++
 			numPieces++
 			if piece.ptype == bishop {
@@ -879,7 +895,8 @@ func (chess *Chess) insufficientMaterial() bool {
 	return retVal
 }
 
-func (chess *Chess) inThreefoldRepition() bool {
+// InThreefoldRepition returns true or false if the current board position has occurred three or more times.
+func (chess *Chess) InThreefoldRepition() bool {
 	retVal := false
 	for _, count := range chess.positionToCount {
 		if count >= 3 {
