@@ -740,7 +740,7 @@ func (chess *Chess) getPawnMoves(fromSquare int, ourColor PieceColor) []Move {
 		retVal = append(retVal, chess.addMove(fromSquare, squareNum, normalMove)...)
 		squareNum = fromSquare + pawnOffsets[ourColor][1]
 		if secondRank[ourColor] == rank(fromSquare) && chess.board[squareNum].IsUnspecified() {
-			retVal = append(retVal, chess.addMove(squareNum, squareNum, bigPawnMove)...)
+			retVal = append(retVal, chess.addMove(fromSquare, squareNum, bigPawnMove)...)
 		}
 	}
 	return retVal

@@ -2,6 +2,33 @@ package chess
 
 import "testing"
 
+func TestSanToMove(t *testing.T) {
+	chess := New()
+	move, err := chess.SANToMove("e4")
+	if err != nil {
+		t.Errorf("Got an error %v", err)
+	} else {
+		chess.makeMove(move)
+		fen := chess.generateFen()
+		t.Log(fen)
+	}
+
+	move, err = chess.SANToMove("Nf6")
+	if err != nil {
+		t.Errorf("Got an error %v", err)
+	} else {
+		chess.makeMove(move)
+		fen := chess.generateFen()
+		t.Log(fen)
+	}
+}
+
+func TestCleanSAN(t *testing.T) {
+	actual := cleanSAN("e4#")
+	if actual != "e4" {
+		t.Errorf("Expected e4, got %s", actual)
+	}
+}
 func TestMoveToSan(t *testing.T) {
 	chess := New()
 

@@ -1,8 +1,37 @@
 package chess
 
 import (
+	"fmt"
+	"regexp"
 	"unicode"
 )
+
+// SANToMove converts a SAN encoded string into a Move, if it's a legal move, or returns an error
+func (chess *Chess) SANToMove(san string) (Move, error) {
+	var err error
+	var retVal Move
+
+	cleanSan := cleanSAN(san)
+	moves := chess.Moves(true, "")
+	for cntr := range moves {
+		maybe := chess.moveToSAN(moves[cntr])
+		if maybe == cleanSan {
+			retVal = moves[cntr]
+			break
+		}
+	}
+	// TODO Determine if a Move struct is valid
+	if retVal.ptype == 0 {
+		err = fmt.Errorf("%s not a legal move", san)
+	}
+	return retVal, err
+}
+
+func cleanSAN(san string) string {
+	r, _ := regexp.Compile("[+#]?[?!]*$")
+	retVal := r.ReplaceAll([]byte(san), []byte(""))
+	return string(retVal)
+}
 
 func (chess *Chess) getDisambigutor(move Move) string {
 	retVal := ""
