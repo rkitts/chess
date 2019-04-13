@@ -187,6 +187,15 @@ func (chess *Chess) Reset() {
 	chess.Load(defaultPosition)
 }
 
+// Move parses the given san and makes that move. Returns an error if the SAN was not le
+func (chess *Chess) Move(san string) error {
+	move, err := chess.SANToMove(san)
+	if err == nil {
+		chess.makeMove(move)
+	}
+	return err
+}
+
 // Get returns the Piece at the given square or an unspecified Piece if the square is unoccupied
 func (chess *Chess) Get(squareID string) Piece {
 	var retVal Piece
@@ -206,7 +215,7 @@ func (chess *Chess) Put(piece Piece, squareName string) error {
 		retVal = chess.maybeUpdateKings(piece, squareID)
 		if retVal == nil {
 			chess.board[squareID] = piece
-			chess.updateSetup(chess.generateFen())
+			chess.updateSetup(chess.GenerateFen())
 		}
 	}
 	return retVal
@@ -219,7 +228,7 @@ func (chess *Chess) Remove(squareID string) Piece {
 		var replacementPiece Piece
 		chess.board[squareNum] = replacementPiece
 	}
-	chess.updateSetup(chess.generateFen())
+	chess.updateSetup(chess.GenerateFen())
 	return retVal
 }
 
@@ -259,6 +268,50 @@ func (chess *Chess) Load(fenToLoad string) error {
 		chess.moveNumber = fen.fullMoves
 	}
 	return err
+}
+
+// GenerateFen builds and returns the FEN encoding of the current board
+func (chess *Chess) GenerateFen() string {
+	emptySquares := 0
+	var retVal strings.Builder
+	for rankValue := 0; rankValue <= 112; rankValue += 16 {
+		for fileValue := 0; fileValue < 8; fileValue++ {
+			squareID := squareNameToID[algebraic(rankValue+fileValue)]
+			if chess.board[squareID].IsUnspecified() {
+				emptySquares++
+			} else {
+				if emptySquares > 0 {
+					retVal.WriteString(strconv.Itoa(emptySquares))
+					emptySquares = 0
+				}
+				pieceCode := rune(chess.board[squareID].ptype)
+				if chess.board[squareID].pcolor == white {
+					pieceCode = unicode.ToUpper(rune(pieceCode))
+				}
+				retVal.WriteRune(pieceCode)
+			}
+			if ((squareID + 1) & 0x88) != 0 {
+				if emptySquares > 0 {
+					retVal.WriteString(strconv.Itoa(emptySquares))
+					emptySquares = 0
+				}
+				if squareID != squareNameToID["h1"] {
+					retVal.WriteString("/")
+				}
+			}
+		}
+	}
+	retVal.WriteString(" ")
+	retVal.WriteRune(rune(chess.turn))
+	retVal.WriteString(" ")
+	retVal.WriteString(generateCastlingFEN(chess.castling))
+	retVal.WriteString(" ")
+	retVal.WriteString(generateEnpassantFEN(chess.enpassantSquare))
+	retVal.WriteString(" ")
+	retVal.WriteString(strconv.Itoa(chess.halfMoves))
+	retVal.WriteString(" ")
+	retVal.WriteString(strconv.Itoa(chess.moveNumber))
+	return retVal.String()
 }
 
 // Clear sets the Chess instance to the starting position
@@ -375,7 +428,7 @@ func (chess *Chess) maybeUpdateKings(piece Piece, squareID int) error {
 }
 
 func (chess *Chess) removeFromPositionCount() {
-	fen := chess.generateFen()
+	fen := chess.GenerateFen()
 	fen = fen[:len(fen)-4]
 	chess.positionToCount[fen]--
 }
@@ -440,49 +493,6 @@ func (chess *Chess) updateSetup(fen string) {
 			delete(chess.header, "FEN")
 		}
 	}
-}
-
-func (chess *Chess) generateFen() string {
-	emptySquares := 0
-	var retVal strings.Builder
-	for rankValue := 0; rankValue <= 112; rankValue += 16 {
-		for fileValue := 0; fileValue < 8; fileValue++ {
-			squareID := squareNameToID[algebraic(rankValue+fileValue)]
-			if chess.board[squareID].IsUnspecified() {
-				emptySquares++
-			} else {
-				if emptySquares > 0 {
-					retVal.WriteString(strconv.Itoa(emptySquares))
-					emptySquares = 0
-				}
-				pieceCode := rune(chess.board[squareID].ptype)
-				if chess.board[squareID].pcolor == white {
-					pieceCode = unicode.ToUpper(rune(pieceCode))
-				}
-				retVal.WriteRune(pieceCode)
-			}
-			if ((squareID + 1) & 0x88) != 0 {
-				if emptySquares > 0 {
-					retVal.WriteString(strconv.Itoa(emptySquares))
-					emptySquares = 0
-				}
-				if squareID != squareNameToID["h1"] {
-					retVal.WriteString("/")
-				}
-			}
-		}
-	}
-	retVal.WriteString(" ")
-	retVal.WriteRune(rune(chess.turn))
-	retVal.WriteString(" ")
-	retVal.WriteString(generateCastlingFEN(chess.castling))
-	retVal.WriteString(" ")
-	retVal.WriteString(generateEnpassantFEN(chess.enpassantSquare))
-	retVal.WriteString(" ")
-	retVal.WriteString(strconv.Itoa(chess.halfMoves))
-	retVal.WriteString(" ")
-	retVal.WriteString(strconv.Itoa(chess.moveNumber))
-	return retVal.String()
 }
 
 func generateEnpassantFEN(squareID int) string {
@@ -607,7 +617,7 @@ func (chess *Chess) makeMove(moveToMake Move) {
 }
 
 func (chess *Chess) addToPositionCount() {
-	fen := chess.generateFen()
+	fen := chess.GenerateFen()
 	fen = fen[:len(fen)-4]
 	chess.positionToCount[fen]++
 }

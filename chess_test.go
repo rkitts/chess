@@ -107,7 +107,7 @@ func TestInsufficientMaterial(t *testing.T) {
 
 func assertInsufficientMaterial(chess *Chess, t *testing.T) {
 	if !chess.InsufficientMaterial() {
-		t.Errorf("Expected insufficient material for board %s", chess.generateFen())
+		t.Errorf("Expected insufficient material for board %s", chess.GenerateFen())
 	}
 }
 
@@ -766,8 +766,8 @@ func TestResetLoadsDefaultPosition(t *testing.T) {
 	chess := New()
 	chess.Clear()
 	chess.Reset()
-	if chess.generateFen() != defaultPosition {
-		t.Errorf("Did not get defaultPosition, got '%s'", chess.generateFen())
+	if chess.GenerateFen() != defaultPosition {
+		t.Errorf("Did not get defaultPosition, got '%s'", chess.GenerateFen())
 	}
 }
 
@@ -829,7 +829,7 @@ func TestClearedBoardGeneratesEmptyFEN(t *testing.T) {
 	chess := New()
 	chess.Clear()
 	expected := "8/8/8/8/8/8/8/8 w - - 0 1"
-	actual := chess.generateFen()
+	actual := chess.GenerateFen()
 	if actual != expected {
 		t.Errorf("Expected '%s' got '%s'", expected, actual)
 	}
@@ -837,7 +837,7 @@ func TestClearedBoardGeneratesEmptyFEN(t *testing.T) {
 
 func TestGenerateFenWorks(t *testing.T) {
 	chess := New()
-	actual := chess.generateFen()
+	actual := chess.GenerateFen()
 	if actual != defaultPosition {
 		t.Errorf("Got unexpected '%s', expected '%s'", actual, defaultPosition)
 	}

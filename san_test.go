@@ -9,7 +9,7 @@ func TestSanToMove(t *testing.T) {
 		t.Errorf("Got an error %v", err)
 	} else {
 		chess.makeMove(move)
-		fen := chess.generateFen()
+		fen := chess.GenerateFen()
 		t.Log(fen)
 	}
 
@@ -18,7 +18,7 @@ func TestSanToMove(t *testing.T) {
 		t.Errorf("Got an error %v", err)
 	} else {
 		chess.makeMove(move)
-		fen := chess.generateFen()
+		fen := chess.GenerateFen()
 		t.Log(fen)
 	}
 }
